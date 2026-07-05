@@ -1,0 +1,124 @@
+version: '3.9'
+
+# ==============================================================
+# OPENATS — AI Recruiting Platform
+# Docker Compose Stack
+#
+# NOTE: The vLLM service requires a CUDA-capable GPU.
+#       Pull the model manually before starting:
+#         docker exec openats-vllm huggingface-cli download Qwen/Qwen3-8B
+# ==============================================================
+
+services:
+  # ------------------------------------------------------------
+  # PostgreSQL with pgvector support
+  # ------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: openats-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openats}
+      POSTGRES_USER: ${POSTGRES_USER:-openats}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-openats} -d ${POSTGRES_DB:-openats}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ------------------------------------------------------------
+  # Redis — job queue broker and caching
+  # ------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: openats-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ------------------------------------------------------------
+  # API — Node.js / Express backend
+  # ------------------------------------------------------------
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: openats-api
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ------------------------------------------------------------
+  # Web — Next.js frontend
+  # ------------------------------------------------------------
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: openats-web
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    depends_on:
+      - api
+
+  # ------------------------------------------------------------
+  # Worker — Python BullMQ resume processing worker
+  # ------------------------------------------------------------
+  worker:
+    build:
+      context: ./workers/resume_worker
+      dockerfile: Dockerfile
+    container_name: openats-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      VLLM_BASE_URL: http://host.docker.internal:11434
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+# ==============================================================
+# Named volumes
+# ==============================================================
+volumes:
+  postgres_data:
+  redis_data:
