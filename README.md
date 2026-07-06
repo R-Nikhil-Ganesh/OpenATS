@@ -1,8 +1,8 @@
 # OpenATS — AI-Powered Applicant Tracking System
 
-OpenATS is a modern, highly scalable, multi-tenant Applicant Tracking System (ATS) powered by generative AI. It automates resume screening, skills extraction, and candidate matching using local LLM inference and vector search. 
+OpenATS is a modern, highly scalable Applicant Tracking System (ATS) powered by generative AI. It automates resume screening, skills extraction, and candidate matching using local LLM inference and vector search. 
 
-OpenATS is designed with multi-tenancy from day one, employing strict PostgreSQL Row-Level Security (RLS) to ensure absolute data isolation across different tenants.
+OpenATS is designed as a single-tenant, locally hosted on-premises application. The system can be run entirely locally using local LLMs (Ollama/vLLM) and a local PostgreSQL/pgvector database.
 
 ## 🏗️ Architecture & Tech Stack
 
@@ -12,12 +12,6 @@ OpenATS is designed with multi-tenancy from day one, employing strict PostgreSQL
 - **Queue & Caching**: Redis + BullMQ for handling asynchronous background processing jobs.
 - **AI Worker (`workers/resume_worker`)**: Python-based worker consuming BullMQ jobs for PDF extraction, embedding generation, and AI scoring.
 - **LLM Engine**: vLLM running a quantized local model (`Qwen3-8B`) for fast, private, on-device AI inference.
-
-## 🔒 Multi-Tenancy & Security
-
-Security and data isolation are baked into the core database layer rather than relying purely on application-level logic:
-- **Row-Level Security (RLS)**: Every tenant-scoped table in PostgreSQL is protected by strict RLS policies.
-- **Restricted Connection Roles**: The application API and AI workers do not execute queries as a superuser. They connect via a restricted role to impersonate a specific tenant context, preventing any cross-tenant data leaks.
 
 ## 🚀 Prerequisites
 
@@ -37,7 +31,7 @@ Open `.env` and fill in any necessary configurations (the defaults work out of t
 **2. Start the Docker Stack**
 The entire infrastructure (PostgreSQL, Redis, Node API, Next.js Web, Python Worker) is containerized.
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 **3. Download the LLM Model (Required for AI Processing)**
@@ -59,7 +53,7 @@ openats/
 ├── workers/
 │   └── resume_worker/      # Python worker (BullMQ, PDF Parsing, LLM calls)
 ├── infra/
-│   └── postgres/           # Database initialization scripts and RLS definitions
+│   └── postgres/           # Database initialization scripts
 ├── docker-compose.yml      # Orchestrates all microservices
 └── package.json            # Root workspace configuration
 ```
@@ -70,13 +64,15 @@ openats/
 - **API Server**: `http://localhost:3001`
 - **Database**: `localhost:5432`
 
-To get started, navigate to `http://localhost:3000/register` to create your first tenant organization and user account.
+To get started, navigate to `http://localhost:3000/login` and sign in using the default seeded admin account:
+- **Email:** `admin@local.com`
+- **Password:** `admin`
 
 ## 📜 Database Migrations / Init
 
 The database schema is defined in numbered SQL files located in `infra/postgres/`. These scripts run automatically in numerical order when the `openats-postgres` container initializes an empty volume for the first time. 
 If you need to completely reset the database, simply wipe the docker volumes:
 ```bash
-docker-compose down -v
-docker-compose up -d --build
+docker compose down -v
+docker compose up -d --build
 ```

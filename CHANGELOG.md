@@ -32,5 +32,9 @@ This document tracks all the bug fixes and modifications made to the codebase.
 - **Fix**: Added the `DATABASE_URL` environment variable directly to the `worker` service block in `docker-compose.yml`, overriding the local `.env` default and correctly pointing it to `postgresql://openats:changeme@postgres:5432/openats`.
 - **Resolution**: The worker successfully connects to the database pool, downloads the embedding models, and is actively waiting for jobs on the BullMQ queue to extract and score resumes.
 
+## 7. Architecture Refactoring: Single-Tenant Migration
+- **Refactoring**: Completely removed all multi-tenancy, Row-Level Security (RLS), and complex workspace routing to pivot the architecture to a single-tenant, locally hosted on-premises application.
+- **Fix**: Removed `002_tenants_and_users.sql` and `007_rls.sql`, replacing them with `002_users.sql` and `009_seed_admin.sql`. Stripped `tenant_id` from all API routes, Node.js API middlewares, Python worker tasks, and Next.js frontend pages.
+
 ---
 *Maintained by the Antigravity Codebase Agent.*

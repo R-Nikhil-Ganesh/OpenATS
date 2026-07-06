@@ -55,7 +55,7 @@
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Multi-tenancy**: Every table (except `tenants`) carries a `tenant_id UUID` column. PostgreSQL Row-Level Security (RLS) policies enforce strict isolation using the session variable `app.current_tenant_id`. The API sets this before every query via `BEGIN; SELECT set_config('app.current_tenant_id', $1, true);`.
+**Single-Tenancy**: The application operates in a single-tenant environment, meaning there are no `tenant_id` tracking columns or complex RLS policies. It is designed for single-organization usage on a local host.
 
 ---
 
@@ -163,13 +163,13 @@ D:\openats\
 └── infra/
     └── postgres/
         ├── 001_extensions_and_types.sql  # pgcrypto, vector, pg_trgm + all enums
-        ├── 002_tenants_and_users.sql     # tenants, users, refresh_tokens
+        ├── 002_users.sql                 # users, refresh_tokens
         ├── 003_jobs.sql                  # job_requisitions
         ├── 004_candidates_and_resumes.sql # candidates, resumes
         ├── 005_applications.sql          # applications, evaluations, history, processing jobs, role snapshots
         ├── 006_embeddings.sql            # resume_embeddings, job_embeddings (pgvector)
-        ├── 007_rls.sql                   # RLS policies + openats_app role + GRANTS
-        └── 008_indexes.sql               # All performance + IVFFlat indexes
+        ├── 008_indexes.sql               # All performance + IVFFlat indexes
+        └── 009_seed_admin.sql            # Seed admin user
 ```
 
 ---
@@ -229,30 +229,25 @@ These are the only valid string values for their respective columns. PostgreSQL 
 
 ### 4.2 Table Reference
 
-#### `tenants`
-```
-id UUID PK, name, slug VARCHAR(100) UNIQUE, plan VARCHAR(50) DEFAULT 'trial',
-is_active BOOLEAN, settings JSONB DEFAULT '{}', created_at, updated_at
-```
-> Not RLS-protected. Queried by slug to bootstrap the login flow.
+
 
 #### `users`
 ```
-id UUID PK, tenant_id FK, email, password_hash, full_name,
+id UUID PK, email, password_hash, full_name,
 role::user_role DEFAULT 'recruiter', is_active, last_login_at, created_at, updated_at
-UNIQUE (tenant_id, email)
+UNIQUE (email)
 ```
 
 #### `refresh_tokens`
 ```
-id UUID PK, user_id FK, tenant_id FK, token_hash UNIQUE,
+id UUID PK, user_id FK, token_hash UNIQUE,
 expires_at, revoked_at (null = active), created_at
 ```
 > Stores SHA-256 hash of the JWT refresh token (not the raw token).
 
 #### `job_requisitions`
 ```
-id UUID PK, tenant_id FK, title, department, location, employment_type,
+id UUID PK, title, department, location, employment_type,
 status::job_status DEFAULT 'draft',
 raw_jd TEXT,          -- original JD text (always present)
 normalized_jd TEXT,   -- AI-cleaned JD (null until worker processes)
@@ -264,15 +259,15 @@ created_by FK → users, closed_at, created_at, updated_at
 
 #### `candidates`
 ```
-id UUID PK, tenant_id FK, full_name, email, phone,
+id UUID PK, full_name, email, phone,
 linkedin_url, github_url, location, created_at, updated_at
-UNIQUE (tenant_id, email)
+UNIQUE (email)
 ```
 > Candidate profiles are per-tenant. The same real person at two different companies = two separate candidate rows.
 
 #### `resumes`
 ```
-id UUID PK, tenant_id FK, candidate_id FK,
+id UUID PK, candidate_id FK,
 original_filename, storage_path,  -- absolute path on the shared volume
 file_size_bytes INT, mime_type DEFAULT 'application/pdf',
 content_hash VARCHAR(64),         -- SHA-256 of raw file bytes (for dedup)
@@ -283,19 +278,19 @@ extracted_at, created_at, updated_at
 
 #### `applications`
 ```
-id UUID PK, tenant_id FK,
+id UUID PK,
 candidate_id FK → candidates,
 resume_id FK → resumes,
 job_id FK → job_requisitions,
 status::application_status DEFAULT 'uploaded',
 applied_at, reviewed_by FK → users, reviewer_notes TEXT,
 created_at, updated_at
-UNIQUE (tenant_id, candidate_id, job_id)
+UNIQUE (candidate_id, job_id)
 ```
 
 #### `application_ai_evaluations`
 ```
-id UUID PK, tenant_id FK, application_id FK,
+id UUID PK, application_id FK,
 model_name, model_version,
 tier::ai_tier DEFAULT 'unscored',
 score NUMERIC(5,2) CHECK (0 <= score <= 100),
@@ -309,7 +304,7 @@ scored_at, created_at
 
 #### `application_state_history`
 ```
-id UUID PK, tenant_id FK, application_id FK,
+id UUID PK, application_id FK,
 from_status::application_status,  -- null on first transition
 to_status::application_status,
 changed_by FK → users,
@@ -319,7 +314,7 @@ changed_at
 
 #### `resume_processing_jobs`
 ```
-id UUID PK, tenant_id FK, application_id FK,
+id UUID PK, application_id FK,
 bullmq_job_id VARCHAR(255),  -- BullMQ's internal job ID
 status::processing_job_status DEFAULT 'queued',
 progress INT DEFAULT 0 CHECK (0 <= progress <= 100),
@@ -330,7 +325,7 @@ started_at, completed_at, created_at, updated_at
 
 #### `role_history_snapshots`
 ```
-id UUID PK, tenant_id FK,
+id UUID PK,
 job_id FK → job_requisitions,
 application_id FK → applications,
 evaluation_id FK → application_ai_evaluations,
@@ -351,21 +346,12 @@ captured_at
 
 #### `resume_embeddings` / `job_embeddings`
 ```
-id UUID PK, tenant_id FK, resume_id/job_id FK,
+id UUID PK, resume_id/job_id FK,
 model_name VARCHAR DEFAULT 'all-MiniLM-L6-v2',
 embedding vector(384),   -- pgvector type, cosine-normalized
 created_at
 UNIQUE (resume_id/job_id, model_name)
 ```
-
-### 4.3 Row-Level Security
-
-Every table except `tenants` has `ENABLE ROW LEVEL SECURITY; FORCE ROW LEVEL SECURITY;` and a policy:
-```sql
-USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
-```
-
-This means any query where `app.current_tenant_id` is not set (or empty) sees **zero rows**. This is enforced at the PostgreSQL level — not in application code.
 
 ---
 
@@ -385,25 +371,17 @@ app.use('/dashboard', dashboardRouter);
 app.get('/events', sseHandler);        // SSE
 ```
 
-### 5.2 Database Pool — `src/db/pool.ts` ⭐ CRITICAL
+### 5.2 Database Pool
 
 ```typescript
-// Non-tenant query — ONLY for auth bootstrap (lookup tenant by slug before we know tenantId)
-export async function query<T>(text, params): Promise<QueryResult<T>>
-
-// Tenant-scoped — ALWAYS use this for all other queries
-export async function withTenant<T>(tenantId: string, fn: (client) => Promise<T>): Promise<T>
-
-// Identical to withTenant — explicit naming for clarity when multiple writes are involved
-export async function withTransaction<T>(tenantId: string, fn): Promise<T>
+export async function withTransaction<T>(fn: (client) => Promise<T>): Promise<T>
 ```
 
-**Implementation** (both `withTenant` and `withTransaction` are identical):
+**Implementation**:
 ```typescript
 const client = await pool.connect();
 try {
   await client.query('BEGIN');
-  await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [tenantId]);
   const result = await fn(client);
   await client.query('COMMIT');
   return result;
@@ -414,8 +392,6 @@ try {
   client.release();
 }
 ```
-
-> **Why BEGIN/COMMIT?** `set_config(..., true)` with `is_local = true` only persists within an active transaction. Without the transaction wrapper, the setting evaporates on the next statement and RLS blocks everything.
 
 ### 5.3 Type Definitions — `src/types/index.ts`
 
@@ -437,15 +413,15 @@ interface JwtPayload {
 
 // Express Request augmented with:
 // req.user?: JwtPayload
-// req.tenantId?: string
+// req.
 ```
 
 ### 5.4 Auth Routes — `src/routes/auth.ts`
 
 | Method | Path | Auth | Body / Notes |
 |---|---|---|---|
-| POST | `/auth/register-tenant` | None | `{ tenantName, tenantSlug, fullName, email, password }` · Creates tenant + owner user in raw pool transaction (no RLS yet) |
-| POST | `/auth/login` | None | `{ tenantSlug, email, password }` · Returns `{ accessToken, refreshToken, user }` · Stores SHA-256 of refresh token |
+| POST | `/auth/register-tenant` | None | ``{ fullName, email, password }` · Creates user |
+| POST | `/auth/login` | None | `{ email, password }` · Returns `{ accessToken, refreshToken, user }` · Stores SHA-256 of refresh token |
 | POST | `/auth/refresh` | None | `{ refreshToken }` · Returns `{ accessToken }` |
 | POST | `/auth/logout` | ✅ | `{ refreshToken? }` · Revokes token(s) |
 | GET | `/auth/me` | ✅ | Returns `{ id, email, fullName, role, lastLoginAt, createdAt }` |
@@ -476,7 +452,7 @@ Per-file pipeline (all inside `withTransaction`):
 5. Insert application (`status='uploaded'`)
 6. Insert `resume_processing_jobs` (`status='queued'`)
 7. Update application `status='queued'`
-8. Push BullMQ job: `{ applicationId, resumePath, jobId, tenantId }`
+8. Push BullMQ job: `{ applicationId, resumePath, jobId }`
 
 Returns: `[{ filename, applicationId, candidateId, status: 'queued' }]`
 
@@ -517,8 +493,8 @@ Queue backlog query uses: `status IN ('queued', 'extracting', 'scoring')` — th
 ### 5.10 SSE — `src/sse/events.ts`
 
 - Clients subscribe at `GET /events` (requires auth token)
-- `sseClients: Map<tenantId, Set<Response>>` — registry of live connections per tenant
-- `sendSSEEvent(tenantId, { type, data })` — broadcasts JSON event to all tenant clients
+- `sseClients: Set<Response>` — registry of live connections
+- `sendSSEEvent({ type, data })` — broadcasts JSON event to all tenant clients
 - Heartbeat: `data: heartbeat` every 30 seconds
 - BullMQ `QueueEvents` listener fires SSE on `completed`, `failed`, `progress`
 
@@ -613,7 +589,7 @@ All UI components use **inline styles** (no Tailwind). Dark theme: background `#
 ### 7.1 Pipeline (main.py)
 
 ```
-BullMQ Job: { applicationId, resumePath, jobId, tenantId }
+BullMQ Job: { applicationId, resumePath, jobId }
     │
     ├─→ application.status = 'extracting', processing_job.progress = 10
     │
@@ -660,7 +636,7 @@ async with TenantDB(tenant_id) as conn:
 Internals:
 ```python
 await self.conn.execute("BEGIN")
-await self.conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", tenant_id)
+await self.conn.execute("SELECT set_config('NO LONGER APPLICABLE', $1, true)", tenant_id)
 # ... on __aexit__:
 await self.conn.execute("COMMIT" or "ROLLBACK")
 await pool.release(self.conn)
@@ -793,7 +769,7 @@ When no email is found in the filename during upload: `<sha256_of_filename>@plac
        applications ← insert (status='uploaded')
        resume_processing_jobs ← insert (status='queued')
        applications ← update status='queued'
-   └─ BullMQ ← push { applicationId, resumePath, jobId, tenantId }
+   └─ BullMQ ← push { applicationId, resumePath, jobId }
    └─ SSE ← broadcast { type: 'queued', applicationId }
 
 2. Python worker picks up job from BullMQ
@@ -876,7 +852,7 @@ All authenticated routes require: `Authorization: Bearer <accessToken>`
 ```
 AUTH
   POST  /auth/register-tenant    Body: { tenantName, tenantSlug, fullName, email, password }
-  POST  /auth/login              Body: { tenantSlug, email, password }
+  POST  /auth/login              Body: { email, password }
   POST  /auth/refresh            Body: { refreshToken }
   POST  /auth/logout             Auth · Body: { refreshToken? }
   GET   /auth/me                 Auth
@@ -917,3 +893,57 @@ SSE
 ---
 
 *Last updated: July 2026. Maintained in `D:\openats\AGENTS.md`.*
+
+
+---
+
+## 13. Supplementary Details (Patch 1)
+
+## 1. Frontend Specifics (Next.js & React)
+
+### Real-Time SSE (Server-Sent Events)
+*   **SSE Hook (`useSSE.ts`)**: The frontend subscribes to real-time updates for job processing via SSE.
+*   **Endpoint Mismatch Note**: In `useSSE.ts`, the URL is defined as `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'}/events/processing`. Ensure the API matches this path or adjust the environment variables.
+*   **Polling Fallback**: The Job Detail page (`/jobs/[id]`) polls the `/jobs/:id/stats` endpoint every 10 seconds if there are `processing` or `queued` applications, acting as a fallback to ensure the UI updates if SSE drops.
+
+### API Client Interceptors (`api.ts`)
+*   The `apiClient` automatically attaches the `Bearer` token from `localStorage`.
+*   If a `401 Unauthorized` response is received, the interceptor automatically clears tokens and forcefully redirects the user to `/login` via `window.location.href`.
+
+### Data Transformation
+*   In `jobsApi.getApplications` and `applicationsApi.get`, the frontend transforms flat row data from the backend into nested objects (`candidate` and `ai_analysis`). If the API changes its return shape, these transformers must be updated.
+
+## 2. Worker Pipeline (Python)
+
+### Database Context Management
+*   The worker uses a custom `TransactionDB` async context manager (`db.py`).
+*   This context manager acquires a connection, starts an explicit transaction (`BEGIN`), and `COMMIT`s on exit.
+
+### Extraction & Normalization
+*   **Extractor**: Uses `pymupdf4llm` to extract PDF to Markdown (`extract_pdf_to_markdown`). It captures the document's `content_hash` (SHA-256 of raw bytes) to detect duplicates.
+*   **Normalizer**: Uses Regex heuristics to detect sections (Summary, Experience, Education, Skills) and strip markdown artifacts. It extracts basic contact info (email, phone, name) which is then used to update the `candidates` table.
+
+### Embeddings
+*   Uses `sentence-transformers` (`all-MiniLM-L6-v2`, 384 dimensions).
+*   Text is truncated to ~8,000 characters to prevent token overflow.
+*   The embeddings are stored in `resume_embeddings` as a `vector` using `pgvector`.
+
+### Scoring & LLM
+*   Calls a local vLLM instance (Qwen3-8B) via an OpenAI-compatible `/v1/chat/completions` endpoint.
+*   The system prompt explicitly demands JSON output and enforces Tier thresholds (A: 75-100, B: 50-74, C: 0-49).
+*   The worker retries up to 3 times on JSON parse failures or HTTP errors with exponential backoff.
+*   If a job fails at any stage, `_fail_job` resets the application status to `uploaded` and logs the error to `resume_processing_jobs` so it can be safely retried.
+
+## 3. Database Schema Details
+
+### Strict Enums
+PostgreSQL ENUMs are immutable and strictly enforced. Do not attempt to insert strings that aren't in these lists:
+*   `application_status`: 'uploaded', 'queued', 'extracting', 'extracted', 'scoring', 'reviewable', 'screening', 'interviewing', 'hired', 'rejected', 'archived'
+*   `user_role`: 'owner', 'hiring_manager', 'recruiter', 'viewer'
+*   `job_status`: 'draft', 'active', 'paused', 'closed', 'archived'
+*   `ai_tier`: 'A', 'B', 'C', 'unscored'
+*   `processing_job_status`: 'queued', 'extracting', 'extracted', 'scoring', 'completed', 'failed'
+
+### Application State Tracking
+*   `application_state_history` acts as an immutable audit log for all transitions of an application.
+*   `role_history_snapshots` stores a denormalized snapshot (JSONB) of the evaluation and candidate info whenever a candidate reaches a milestone (e.g., 'screening', 'hired').
