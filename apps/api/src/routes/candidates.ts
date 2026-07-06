@@ -24,7 +24,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
            a.id, a.status, a.applied_at, a.updated_at,
            a.job_id,
            jr.title AS job_title, jr.department, jr.status AS job_status,
-           r.id AS resume_id, r.file_name, r.extraction_status, r.file_size_bytes,
+           r.id AS resume_id, r.original_filename AS file_name, r.file_size_bytes,
            ae.tier, ae.score, ae.summary, ae.recommendation, ae.evaluated_at
          FROM applications a
          JOIN job_requisitions jr ON jr.id = a.job_id

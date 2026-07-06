@@ -116,8 +116,7 @@ router.get('/similar', async (req: Request, res: Response, next: NextFunction): 
            re.resume_id,
            1 - (re.embedding <=> $1::vector) AS similarity_score,
            c.id AS candidate_id, c.full_name, c.email, c.location,
-           r.file_name, r.extraction_status,
-           a.id AS application_id, r.id AS resume_id, r.file_name,
+           a.id AS application_id, r.id AS resume_id, r.original_filename AS file_name,
            ae.tier, ae.score
          FROM resume_embeddings re
          JOIN resumes r ON r.id = re.resume_id

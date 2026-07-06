@@ -51,7 +51,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
            a.id, a.status, a.applied_at, a.updated_at,
            a.job_id, a.candidate_id, a.resume_id,
            c.full_name, c.email, c.phone, c.linkedin_url, c.location,
-           r.file_name, r.storage_path, r.extracted_markdown, r.extraction_status,
+           r.original_filename AS file_name, r.storage_path, r.extracted_markdown,
            r.file_size_bytes, r.mime_type,
            ae.id AS eval_id, ae.score, ae.tier,
            ae.reasons->'strengths' AS strengths, ae.reasons->'weaknesses' AS weaknesses, ae.recommendation,

@@ -14,7 +14,7 @@ type AppStatus = {
 
 type StatusMap = Record<string, AppStatus>;
 
-const SSE_URL = `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'}/events/processing`;
+const SSE_URL = `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1'}/events`;
 
 export function useSSE() {
   const [statusMap, setStatusMap] = useState<StatusMap>({});

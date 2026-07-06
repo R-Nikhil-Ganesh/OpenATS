@@ -337,7 +337,7 @@ router.get('/:id/applications', async (req: Request, res: Response, next: NextFu
         `SELECT
            a.id, a.status, a.applied_at, a.updated_at,
            c.id AS candidate_id, c.full_name, c.email, c.phone, c.location,
-           r.id AS resume_id, r.file_name, r.extraction_status,
+           r.id AS resume_id, r.original_filename AS file_name,
            ae.tier, ae.score, ae.recommendation,
            rpj.status AS processing_status
          FROM applications a

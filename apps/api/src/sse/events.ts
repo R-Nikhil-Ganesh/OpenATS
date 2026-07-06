@@ -90,7 +90,7 @@ const queueEvents = new QueueEvents(config.queue.name, {
 
 queueEvents.on('active', ({ jobId }) => {
   // jobId is applicationId for our jobs
-  broadcastJobEvent(jobId, 'job:active', { applicationId: jobId, status: 'processing' });
+  broadcastJobEvent(jobId, 'job:active', { applicationId: jobId, status: 'extracting' });
 });
 
 queueEvents.on('completed', ({ jobId, returnvalue }) => {

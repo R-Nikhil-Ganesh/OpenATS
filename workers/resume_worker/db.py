@@ -40,15 +40,21 @@ class TenantDB:
     async def __aenter__(self) -> asyncpg.Connection:
         self._pool = await get_pool()
         self.conn = await self._pool.acquire()
-        # SET applies to the session. We must reset it before returning to the pool.
+        # Wrap in an explicit transaction so SET LOCAL persists for all
+        # subsequent queries on this connection within the context.
+        await self.conn.execute("BEGIN")
         await self.conn.execute(
-            f"SET ROLE openats_app; SET app.current_tenant_id = '{self.tenant_id}';"
+            f"SELECT set_config('app.current_tenant_id', $1, true)",
+            self.tenant_id,
         )
         return self.conn
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         if self.conn is not None and self._pool is not None:
-            await self.conn.execute("RESET app.current_tenant_id; RESET ROLE;")
+            if exc_type is not None:
+                await self.conn.execute("ROLLBACK")
+            else:
+                await self.conn.execute("COMMIT")
             await self._pool.release(self.conn)
             self.conn = None
 

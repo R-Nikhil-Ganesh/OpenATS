@@ -3,7 +3,9 @@
 export type ApplicationStatus =
   | 'uploaded'
   | 'queued'
-  | 'processing'
+  | 'extracting'
+  | 'extracted'
+  | 'scoring'
   | 'reviewable'
   | 'screening'
   | 'interviewing'
@@ -27,7 +29,9 @@ export type JobStatus = 'draft' | 'open' | 'paused' | 'closed' | 'archived';
 
 export type ProcessingJobStatus =
   | 'queued'
-  | 'processing'
+  | 'extracting'
+  | 'extracted'
+  | 'scoring'
   | 'completed'
   | 'failed';
 

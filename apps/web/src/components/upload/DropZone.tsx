@@ -62,7 +62,7 @@ export function DropZone({ jobId }: DropZoneProps) {
       );
 
       const fd = new FormData();
-      fd.append('resume', item.file);
+      fd.append('resumes', item.file);
 
       try {
         await apiClient.post(`/jobs/${jobId}/resumes`, fd, {

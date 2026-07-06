@@ -9,10 +9,11 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
 const employmentTypeOptions = [
-  { value: 'full-time', label: 'Full-Time' },
-  { value: 'part-time', label: 'Part-Time' },
+  { value: 'full_time', label: 'Full-Time' },
+  { value: 'part_time', label: 'Part-Time' },
   { value: 'contract', label: 'Contract' },
   { value: 'internship', label: 'Internship' },
+  { value: 'freelance', label: 'Freelance' },
 ];
 
 type FormData = {
@@ -33,7 +34,7 @@ export function CreateJobForm() {
     title: '',
     department: '',
     location: '',
-    employment_type: 'full-time',
+    employment_type: 'full_time',
     raw_jd: '',
     experience_years_min: '0',
     experience_years_max: '5',

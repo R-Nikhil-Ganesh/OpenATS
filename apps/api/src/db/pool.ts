@@ -35,6 +35,8 @@ export async function query<T extends QueryResultRow = any>(
 
 /**
  * Acquires a client, sets the RLS tenant session variable, and runs fn.
+ * We wrap in a transaction so that set_config('...', true) (local=true)
+ * persists for the duration of the callback instead of evaporating immediately.
  * This is the PRIMARY method for all route-level DB queries.
  */
 export async function withTenant<T>(
@@ -43,11 +45,15 @@ export async function withTenant<T>(
 ): Promise<T> {
   const client = await pool.connect();
   try {
-    await client.query("SET ROLE openats_app");
+    await client.query('BEGIN');
     await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [tenantId]);
-    return await fn(client);
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
   } finally {
-    await client.query("RESET ROLE");
     client.release();
   }
 }
@@ -63,7 +69,6 @@ export async function withTransaction<T>(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query("SET ROLE openats_app");
     await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [tenantId]);
     const result = await fn(client);
     await client.query('COMMIT');
@@ -72,7 +77,6 @@ export async function withTransaction<T>(
     await client.query('ROLLBACK');
     throw err;
   } finally {
-    await client.query("RESET ROLE");
     client.release();
   }
 }
