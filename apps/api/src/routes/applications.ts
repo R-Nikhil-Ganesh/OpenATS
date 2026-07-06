@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { withTenant, withTransaction } from '../db/pool';
+import { withTransaction } from '../db/pool';
 import { resumeQueue } from '../db/redis';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/auth';
@@ -45,7 +45,7 @@ const reprocessSchema = z.object({
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       const appRes = await client.query(
         `SELECT
            a.id, a.status, a.applied_at, a.updated_at,
@@ -73,8 +73,8 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
            WHERE application_id = a.id
            ORDER BY created_at DESC LIMIT 1
          ) rpj ON true
-         WHERE a.id = $1 AND a.tenant_id = $2`,
-        [req.params.id, req.tenantId]
+         WHERE a.id = $1`,
+        [req.params.id]
       );
 
       if (!appRes.rows[0]) return null;
@@ -111,7 +111,7 @@ router.patch(
     const { status: newStatus, note } = req.body as z.infer<typeof patchStatusSchema>;
 
     try {
-      const updated = await withTransaction(req.tenantId!, async (client) => {
+      const updated = await withTransaction(async (client) => {
         const appRes = await client.query<{
           id: string;
           status: ApplicationStatus;
@@ -119,8 +119,8 @@ router.patch(
           candidate_id: string;
           resume_id: string;
         }>(
-          'SELECT id, status, job_id, candidate_id, resume_id FROM applications WHERE id = $1 AND tenant_id = $2',
-          [req.params.id, req.tenantId]
+          'SELECT id, status, job_id, candidate_id, resume_id FROM applications WHERE id = $1',
+          [req.params.id]
         );
 
         const app = appRes.rows[0];
@@ -145,9 +145,9 @@ router.patch(
         // Record state history
         await client.query(
           `INSERT INTO application_state_history
-             (id, tenant_id, application_id, from_status, to_status, changed_by, note)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [uuidv4(), req.tenantId, app.id, app.status, newStatus, req.user!.userId, note ?? null]
+             (id, application_id, from_status, to_status, changed_by, note)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [uuidv4(), app.id, app.status, newStatus, req.user!.userId, note ?? null]
         );
 
         // Trigger role history snapshot for milestone transitions
@@ -173,12 +173,11 @@ router.patch(
 
           await client.query(
             `INSERT INTO role_history_snapshots
-               (id, tenant_id, job_id, application_id, evaluation_id,
+               (id, job_id, application_id, evaluation_id,
                 milestone, snapshot_data)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+             VALUES ($1,$2,$3,$4,$5,$6)`,
             [
               uuidv4(),
-              req.tenantId,
               app.job_id,
               app.id,
               evalRow.id || null,
@@ -222,7 +221,7 @@ router.post(
     const { stage = 'extraction' } = req.body as z.infer<typeof reprocessSchema>;
 
     try {
-      const result = await withTransaction(req.tenantId!, async (client) => {
+      const result = await withTransaction(async (client) => {
         const appRes = await client.query<{
           id: string;
           job_id: string;
@@ -231,8 +230,8 @@ router.post(
           `SELECT a.id, a.job_id, r.storage_path AS resume_path
            FROM applications a
            JOIN resumes r ON r.id = a.resume_id
-           WHERE a.id = $1 AND a.tenant_id = $2`,
-          [req.params.id, req.tenantId]
+           WHERE a.id = $1`,
+          [req.params.id]
         );
 
         const app = appRes.rows[0] as (typeof appRes.rows[0] & { resume_path: string }) | undefined;
@@ -269,7 +268,6 @@ router.post(
           applicationId: result.appId,
           resumePath: result.resumePath,
           jobId: result.jobId,
-          tenantId: req.tenantId!,
           reprocess: true,
           stage,
         },
@@ -277,7 +275,7 @@ router.post(
       );
 
       // Store BullMQ job id
-      await withTransaction(req.tenantId!, async (client) => {
+      await withTransaction(async (client) => {
         await client.query(
           'UPDATE resume_processing_jobs SET bullmq_job_id = $1 WHERE application_id = $2',
           [bullJob.id, result.appId]
@@ -295,15 +293,15 @@ router.post(
 
 router.get('/:id/history', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       return client.query(
         `SELECT sh.id, sh.from_status, sh.to_status, sh.note, sh.created_at,
                 u.full_name AS changed_by_name, u.email AS changed_by_email
          FROM application_state_history sh
          LEFT JOIN users u ON u.id = sh.changed_by
-         WHERE sh.application_id = $1 AND sh.tenant_id = $2
+         WHERE sh.application_id = $1
          ORDER BY sh.created_at ASC`,
-        [req.params.id, req.tenantId]
+        [req.params.id]
       );
     });
 

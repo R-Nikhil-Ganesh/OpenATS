@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { withTenant } from '../db/pool';
+import { withTransaction } from '../db/pool';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -21,9 +21,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
     const offset = (pageNum - 1) * limitNum;
 
-    const conditions = ['rhs.tenant_id = $1'];
-    const params: unknown[] = [req.tenantId];
-    let idx = 2;
+    const conditions = ['1=1'];
+    const params: unknown[] = [];
+    let idx = 1;
 
     if (job_id) {
       conditions.push(`rhs.job_id = $${idx++}`);
@@ -40,7 +40,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
 
     const where = conditions.join(' AND ');
 
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       const countRes = await client.query<{ total: string }>(
         `SELECT COUNT(*) AS total FROM role_history_snapshots rhs WHERE ${where}`,
         params
@@ -97,11 +97,11 @@ router.get('/similar', async (req: Request, res: Response, next: NextFunction): 
 
     const limitNum = Math.min(50, Math.max(1, parseInt(limitStr)));
 
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       // Fetch the job embedding
       const embeddingRes = await client.query<{ embedding: string }>(
-        `SELECT embedding FROM job_embeddings WHERE job_id = $1 AND tenant_id = $2`,
-        [job_id, req.tenantId]
+        `SELECT embedding FROM job_embeddings WHERE job_id = $1`,
+        [job_id]
       );
 
       if (!embeddingRes.rows[0]) {
@@ -121,16 +121,15 @@ router.get('/similar', async (req: Request, res: Response, next: NextFunction): 
          FROM resume_embeddings re
          JOIN resumes r ON r.id = re.resume_id
          JOIN candidates c ON c.id = r.candidate_id
-         LEFT JOIN applications a ON a.resume_id = re.resume_id AND a.tenant_id = $2
+         LEFT JOIN applications a ON a.resume_id = re.resume_id
          LEFT JOIN LATERAL (
            SELECT tier, score FROM application_ai_evaluations
            WHERE application_id = a.id
            ORDER BY created_at DESC LIMIT 1
          ) ae ON true
-         WHERE re.tenant_id = $2
          ORDER BY re.embedding <=> $1::vector
-         LIMIT $3`,
-        [jobEmbedding, req.tenantId, limitNum]
+         LIMIT $2`,
+        [jobEmbedding, limitNum]
       );
 
       return similarRes.rows;

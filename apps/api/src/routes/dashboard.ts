@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { withTenant } from '../db/pool';
+import { withTransaction } from '../db/pool';
 import { resumeQueue } from '../db/redis';
 import { authenticate } from '../middleware/auth';
 
@@ -10,32 +10,28 @@ router.use(authenticate);
 
 router.get('/summary', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await withTenant(req.tenantId!, async (client) => {
+    const data = await withTransaction(async (client) => {
       // Active jobs
       const activeJobsRes = await client.query<{ count: string }>(
         `SELECT COUNT(*) AS count FROM job_requisitions
-         WHERE status = 'active' AND tenant_id = $1`,
-        [req.tenantId]
+         WHERE status = 'active'`
       );
 
       // Total applicants
       const totalApplicantsRes = await client.query<{ count: string }>(
-        `SELECT COUNT(*) AS count FROM applications WHERE tenant_id = $1`,
-        [req.tenantId]
+        `SELECT COUNT(*) AS count FROM applications`
       );
 
       // Queue backlog
       const queueBacklogRes = await client.query<{ count: string }>(
         `SELECT COUNT(*) AS count FROM resume_processing_jobs
-         WHERE tenant_id = $1 AND status IN ('queued', 'extracting', 'scoring')`,
-        [req.tenantId]
+         WHERE status IN ('queued', 'extracting', 'scoring')`
       );
 
       // Failed count
       const failedCountRes = await client.query<{ count: string }>(
         `SELECT COUNT(*) AS count FROM resume_processing_jobs
-         WHERE tenant_id = $1 AND status = 'failed'`,
-        [req.tenantId]
+         WHERE status = 'failed'`
       );
 
       // Tier distribution
@@ -47,9 +43,7 @@ router.get('/summary', async (req: Request, res: Response, next: NextFunction): 
            WHERE application_id = a.id
            ORDER BY created_at DESC LIMIT 1
          ) ae ON true
-         WHERE a.tenant_id = $1
-         GROUP BY ae.tier`,
-        [req.tenantId]
+         GROUP BY ae.tier`
       );
 
       // Recent jobs (last 5)
@@ -57,10 +51,8 @@ router.get('/summary', async (req: Request, res: Response, next: NextFunction): 
         `SELECT id, title, department, location, employment_type, status,
                 experience_years_min, experience_years_max, created_at, updated_at
          FROM job_requisitions
-         WHERE tenant_id = $1
          ORDER BY created_at DESC
-         LIMIT 5`,
-        [req.tenantId]
+         LIMIT 5`
       );
 
       const tierDistribution = [

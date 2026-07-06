@@ -34,42 +34,15 @@ export async function query<T extends QueryResultRow = any>(
 }
 
 /**
- * Acquires a client, sets the RLS tenant session variable, and runs fn.
- * We wrap in a transaction so that set_config('...', true) (local=true)
- * persists for the duration of the callback instead of evaporating immediately.
- * This is the PRIMARY method for all route-level DB queries.
- */
-export async function withTenant<T>(
-  tenantId: string,
-  fn: (client: PoolClient) => Promise<T>
-): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [tenantId]);
-    const result = await fn(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-/**
- * Acquires a client, sets the RLS tenant session variable, wraps fn in a
- * BEGIN/COMMIT transaction. Rolls back on error.
+ * Acquires a client and wraps fn in a BEGIN/COMMIT transaction.
+ * Rolls back on error.
  */
 export async function withTransaction<T>(
-  tenantId: string,
   fn: (client: PoolClient) => Promise<T>
 ): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [tenantId]);
     const result = await fn(client);
     await client.query('COMMIT');
     return result;

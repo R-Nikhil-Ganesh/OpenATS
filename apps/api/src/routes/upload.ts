@@ -16,9 +16,8 @@ router.use(authenticate);
 
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const tenantId = req.tenantId!;
     const jobId = req.params.jobId;
-    const uploadPath = path.join(config.upload.dir, tenantId, jobId);
+    const uploadPath = path.join(config.upload.dir, jobId);
     fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
@@ -99,7 +98,6 @@ router.post(
     }
 
     const { jobId } = req.params;
-    const tenantId = req.tenantId!;
 
     const results: { filename: string; applicationId: string; status: string }[] = [];
 
@@ -108,15 +106,15 @@ router.post(
         const contentHash = await computeFileHash(file.path);
         const { email, fullName } = deriveEmailFromFilename(file.originalname, contentHash);
 
-        const applicationId = await withTransaction(tenantId, async (client) => {
-          // Upsert candidate by email within tenant
+        const applicationId = await withTransaction(async (client) => {
+          // Upsert candidate by email
           const candidateRes = await client.query<{ id: string }>(
-            `INSERT INTO candidates (id, tenant_id, full_name, email)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT (tenant_id, email)
+            `INSERT INTO candidates (id, full_name, email)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (email)
              DO UPDATE SET full_name = EXCLUDED.full_name, updated_at = NOW()
              RETURNING id`,
-            [uuidv4(), tenantId, fullName, email]
+            [uuidv4(), fullName, email]
           );
           const candidateId = candidateRes.rows[0].id;
 
@@ -124,8 +122,8 @@ router.post(
           const dupCheck = await client.query<{ id: string }>(
             `SELECT r.id FROM resumes r
              JOIN applications a ON a.resume_id = r.id
-             WHERE r.content_hash = $1 AND r.tenant_id = $2 AND a.job_id = $3`,
-            [contentHash, tenantId, jobId]
+             WHERE r.content_hash = $1 AND a.job_id = $2`,
+            [contentHash, jobId]
           );
           if (dupCheck.rows[0]) {
             // Skip duplicate; delete the just-uploaded file
@@ -143,13 +141,12 @@ router.post(
           // Create resume record
           const resumeRes = await client.query<{ id: string }>(
             `INSERT INTO resumes
-               (id, tenant_id, candidate_id, storage_path, content_hash, file_name,
+               (id, candidate_id, storage_path, content_hash, file_name,
                 file_size_bytes, mime_type, extraction_status)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending')
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'pending')
              RETURNING id`,
             [
               uuidv4(),
-              tenantId,
               candidateId,
               file.path,
               contentHash,
@@ -163,19 +160,19 @@ router.post(
           // Create application
           const appRes = await client.query<{ id: string }>(
             `INSERT INTO applications
-               (id, tenant_id, job_id, candidate_id, resume_id, status)
-             VALUES ($1,$2,$3,$4,$5,'uploaded')
+               (id, job_id, candidate_id, resume_id, status)
+             VALUES ($1,$2,$3,$4,'uploaded')
              RETURNING id`,
-            [uuidv4(), tenantId, jobId, candidateId, resumeId]
+            [uuidv4(), jobId, candidateId, resumeId]
           );
           const appId = appRes.rows[0].id;
 
           // Create processing job record
           await client.query(
             `INSERT INTO resume_processing_jobs
-               (id, tenant_id, application_id, status, stage, attempts)
-             VALUES ($1,$2,$3,'queued','extraction',0)`,
-            [uuidv4(), tenantId, appId]
+               (id, application_id, status, stage, attempts)
+             VALUES ($1,$2,'queued','extraction',0)`,
+            [uuidv4(), appId]
           );
 
           // Update application to queued
@@ -194,13 +191,12 @@ router.post(
             applicationId,
             resumePath: file.path,
             jobId,
-            tenantId,
           },
           { jobId: applicationId }
         );
 
         // Store BullMQ job id in processing record
-        await withTransaction(tenantId, async (client) => {
+        await withTransaction(async (client) => {
           await client.query(
             `UPDATE resume_processing_jobs
              SET bullmq_job_id = $1

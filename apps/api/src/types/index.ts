@@ -37,19 +37,8 @@ export type ProcessingJobStatus =
 
 // ─── Database Row Interfaces ─────────────────────────────────────────────────
 
-export interface Tenant {
-  id: string;
-  name: string;
-  slug: string;
-  plan: string;
-  is_active: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
-
 export interface User {
   id: string;
-  tenant_id: string;
   email: string;
   password_hash: string;
   full_name: string;
@@ -63,7 +52,6 @@ export interface User {
 export interface RefreshToken {
   id: string;
   user_id: string;
-  tenant_id: string;
   token_hash: string;
   expires_at: Date;
   revoked_at: Date | null;
@@ -72,7 +60,6 @@ export interface RefreshToken {
 
 export interface JobRequisition {
   id: string;
-  tenant_id: string;
   title: string;
   department: string | null;
   location: string | null;
@@ -88,7 +75,6 @@ export interface JobRequisition {
 
 export interface Candidate {
   id: string;
-  tenant_id: string;
   full_name: string;
   email: string;
   phone: string | null;
@@ -100,7 +86,6 @@ export interface Candidate {
 
 export interface Resume {
   id: string;
-  tenant_id: string;
   candidate_id: string;
   storage_path: string;
   content_hash: string;
@@ -115,7 +100,6 @@ export interface Resume {
 
 export interface Application {
   id: string;
-  tenant_id: string;
   job_id: string;
   candidate_id: string;
   resume_id: string;
@@ -126,7 +110,6 @@ export interface Application {
 
 export interface AiEvaluation {
   id: string;
-  tenant_id: string;
   application_id: string;
   model_name: string;
   model_version: string | null;
@@ -143,7 +126,6 @@ export interface AiEvaluation {
 
 export interface StateHistory {
   id: string;
-  tenant_id: string;
   application_id: string;
   from_status: ApplicationStatus | null;
   to_status: ApplicationStatus;
@@ -154,7 +136,6 @@ export interface StateHistory {
 
 export interface ProcessingJob {
   id: string;
-  tenant_id: string;
   application_id: string;
   bullmq_job_id: string | null;
   status: ProcessingJobStatus;
@@ -169,7 +150,6 @@ export interface ProcessingJob {
 
 export interface RoleHistorySnapshot {
   id: string;
-  tenant_id: string;
   job_id: string;
   application_id: string;
   candidate_id: string;
@@ -187,7 +167,6 @@ export interface RoleHistorySnapshot {
 
 export interface JwtPayload {
   userId: string;
-  tenantId: string;
   role: string;
   email: string;
   iat?: number;
@@ -200,7 +179,6 @@ declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload;
-      tenantId?: string;
     }
   }
 }

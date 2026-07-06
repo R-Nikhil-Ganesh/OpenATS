@@ -9,7 +9,6 @@
 -- ------------------------------------------------------------
 CREATE TABLE applications (
   id              UUID                PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id       UUID                NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   candidate_id    UUID                NOT NULL REFERENCES candidates(id),
   resume_id       UUID                NOT NULL REFERENCES resumes(id),
   job_id          UUID                NOT NULL REFERENCES job_requisitions(id) ON DELETE CASCADE,
@@ -19,7 +18,7 @@ CREATE TABLE applications (
   reviewer_notes  TEXT,
   created_at      TIMESTAMPTZ         DEFAULT now(),
   updated_at      TIMESTAMPTZ         DEFAULT now(),
-  UNIQUE (tenant_id, candidate_id, job_id)  -- one application per candidate per job
+  UNIQUE (candidate_id, job_id)  -- one application per candidate per job
 );
 
 -- ------------------------------------------------------------
@@ -27,7 +26,6 @@ CREATE TABLE applications (
 -- ------------------------------------------------------------
 CREATE TABLE application_ai_evaluations (
   id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id             UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   application_id        UUID        NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
   model_name            VARCHAR(255) NOT NULL,
   model_version         VARCHAR(100),
@@ -47,7 +45,6 @@ CREATE TABLE application_ai_evaluations (
 -- ------------------------------------------------------------
 CREATE TABLE application_state_history (
   id              UUID                PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id       UUID                NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   application_id  UUID                NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
   from_status     application_status,
   to_status       application_status  NOT NULL,
@@ -61,7 +58,6 @@ CREATE TABLE application_state_history (
 -- ------------------------------------------------------------
 CREATE TABLE resume_processing_jobs (
   id              UUID                    PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id       UUID                    NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   application_id  UUID                    NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
   bullmq_job_id   VARCHAR(255),
   status          processing_job_status   NOT NULL DEFAULT 'queued',
@@ -80,7 +76,6 @@ CREATE TABLE resume_processing_jobs (
 -- ------------------------------------------------------------
 CREATE TABLE role_history_snapshots (
   id              UUID                PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id       UUID                NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   job_id          UUID                NOT NULL REFERENCES job_requisitions(id),
   application_id  UUID                NOT NULL REFERENCES applications(id),
   evaluation_id   UUID                REFERENCES application_ai_evaluations(id),

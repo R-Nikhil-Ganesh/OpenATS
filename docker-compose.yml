@@ -106,6 +106,9 @@ services:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
       VLLM_BASE_URL: http://host.docker.internal:11434
+      VLLM_QUANTIZATION: awq
+      VLLM_GPU_MEMORY_UTILIZATION: 0.8
+      WORKER_CONCURRENCY: 2
       DATABASE_URL: postgresql://${POSTGRES_USER:-openats}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-openats}
     volumes:
       - ./uploads:/app/uploads

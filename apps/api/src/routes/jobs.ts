@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import { withTenant } from '../db/pool';
+import { withTransaction } from '../db/pool';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -36,9 +36,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
     const offset = (pageNum - 1) * limitNum;
 
-    const conditions: string[] = ['jr.tenant_id = $1'];
-    const params: unknown[] = [req.tenantId];
-    let idx = 2;
+    const conditions: string[] = ['1=1'];
+    const params: unknown[] = [];
+    let idx = 1;
 
     if (status) {
       conditions.push(`jr.status = $${idx++}`);
@@ -47,7 +47,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
 
     const where = conditions.join(' AND ');
 
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       const countRes = await client.query<{ total: string }>(
         `SELECT COUNT(*) AS total FROM job_requisitions jr WHERE ${where}`,
         params
@@ -66,7 +66,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
            COUNT(a.id) FILTER (WHERE ae.tier = 'C') AS tier_c_count,
            COUNT(a.id) FILTER (WHERE a.status IN ('queued', 'extracting', 'scoring')) AS processing_count
          FROM job_requisitions jr
-         LEFT JOIN applications a ON a.job_id = jr.id AND a.tenant_id = jr.tenant_id
+         LEFT JOIN applications a ON a.job_id = jr.id
          LEFT JOIN LATERAL (
            SELECT tier FROM application_ai_evaluations
            WHERE application_id = a.id
@@ -107,16 +107,15 @@ router.post(
       const body = req.body as z.infer<typeof createJobSchema>;
       const id = uuidv4();
 
-      const result = await withTenant(req.tenantId!, async (client) => {
+      const result = await withTransaction(async (client) => {
         return client.query(
           `INSERT INTO job_requisitions
-             (id, tenant_id, title, department, location, employment_type,
+             (id, title, department, location, employment_type,
               raw_jd, status, experience_years_min, experience_years_max, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,'draft',$8,$9,$10)
+           VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,$9)
            RETURNING *`,
           [
             id,
-            req.tenantId,
             body.title,
             body.department ?? null,
             body.location ?? null,
@@ -140,7 +139,7 @@ router.post(
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       return client.query(
         `SELECT
            jr.*,
@@ -152,15 +151,15 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
            COUNT(a.id) FILTER (WHERE a.status IN ('queued', 'extracting', 'scoring')) AS processing_count
          FROM job_requisitions jr
          LEFT JOIN users u ON u.id = jr.created_by
-         LEFT JOIN applications a ON a.job_id = jr.id AND a.tenant_id = jr.tenant_id
+         LEFT JOIN applications a ON a.job_id = jr.id
          LEFT JOIN LATERAL (
            SELECT tier FROM application_ai_evaluations
            WHERE application_id = a.id
            ORDER BY created_at DESC LIMIT 1
          ) ae ON true
-         WHERE jr.id = $1 AND jr.tenant_id = $2
+         WHERE jr.id = $1
          GROUP BY jr.id, u.full_name`,
-        [req.params.id, req.tenantId]
+        [req.params.id]
       );
     });
 
@@ -185,7 +184,7 @@ router.put(
       const body = req.body as z.infer<typeof updateJobSchema>;
       const fields = Object.entries(body)
         .filter(([, v]) => v !== undefined)
-        .map(([k], i) => `${k} = $${i + 3}`);
+        .map(([k], i) => `${k} = $${i + 2}`);
 
       if (fields.length === 0) {
         res.status(400).json({ error: { code: 'NO_FIELDS', message: 'No fields to update' } });
@@ -194,13 +193,13 @@ router.put(
 
       const values = Object.values(body).filter((v) => v !== undefined);
 
-      const result = await withTenant(req.tenantId!, async (client) => {
+      const result = await withTransaction(async (client) => {
         return client.query(
           `UPDATE job_requisitions
            SET ${fields.join(', ')}, updated_at = NOW()
-           WHERE id = $1 AND tenant_id = $2
+           WHERE id = $1
            RETURNING *`,
-          [req.params.id, req.tenantId, ...values]
+          [req.params.id, ...values]
         );
       });
 
@@ -222,13 +221,13 @@ router.delete(
   requireRole('owner', 'hiring_manager'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await withTenant(req.tenantId!, async (client) => {
+      const result = await withTransaction(async (client) => {
         return client.query(
           `UPDATE job_requisitions
            SET status = 'archived', updated_at = NOW()
-           WHERE id = $1 AND tenant_id = $2
+           WHERE id = $1
            RETURNING id, status`,
-          [req.params.id, req.tenantId]
+          [req.params.id]
         );
       });
 
@@ -247,7 +246,7 @@ router.delete(
 
 router.get('/:id/stats', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       const statsRes = await client.query(
         `SELECT
            COUNT(a.id) AS total,
@@ -261,8 +260,8 @@ router.get('/:id/stats', async (req: Request, res: Response, next: NextFunction)
            WHERE application_id = a.id
            ORDER BY created_at DESC LIMIT 1
          ) rpj ON true
-         WHERE a.job_id = $1 AND a.tenant_id = $2`,
-        [req.params.id, req.tenantId]
+         WHERE a.job_id = $1`,
+        [req.params.id]
       );
 
       const row = statsRes.rows[0] || {};
@@ -297,9 +296,9 @@ router.get('/:id/applications', async (req: Request, res: Response, next: NextFu
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
     const offset = (pageNum - 1) * limitNum;
 
-    const conditions = ['a.job_id = $1', 'a.tenant_id = $2'];
-    const params: unknown[] = [req.params.id, req.tenantId];
-    let idx = 3;
+    const conditions = ['a.job_id = $1'];
+    const params: unknown[] = [req.params.id];
+    let idx = 2;
 
     if (status) {
       conditions.push(`a.status = $${idx++}`);
@@ -319,7 +318,7 @@ router.get('/:id/applications', async (req: Request, res: Response, next: NextFu
     const orderBy = orderMap[sort] || 'a.applied_at DESC';
     const where = conditions.join(' AND ');
 
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       const countRes = await client.query<{ total: string }>(
         `SELECT COUNT(*) AS total
          FROM applications a

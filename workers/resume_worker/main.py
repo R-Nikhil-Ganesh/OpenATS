@@ -9,7 +9,7 @@ from bullmq import Job, Worker
 
 from config import config
 from db import (
-    TenantDB,
+    TransactionDB,
     close_pool,
     get_pool,
     update_application_status,
@@ -41,7 +41,6 @@ def _utcnow() -> datetime:
 
 
 async def _fail_job(
-    tenant_id: str,
     application_id: str,
     proc_job_id: str,
     error_message: str,
@@ -52,7 +51,7 @@ async def _fail_job(
     Swallows all inner exceptions to avoid masking the original error.
     """
     try:
-        await update_application_status(tenant_id, application_id, "uploaded")
+        await update_application_status(application_id, "uploaded")
     except Exception as inner:
         logger.error("_fail_job: could not reset application status: %s", inner)
 
@@ -87,7 +86,6 @@ async def process_resume(job: Job, job_token: str) -> dict:
         "applicationId": str,
         "resumePath":    str,   # absolute path on the worker's filesystem
         "jobId":         str,   # job_requisition id
-        "tenantId":      str,
         "reprocess":     bool,  # optional
         "stage":         str,   # optional hint
     }
@@ -95,18 +93,16 @@ async def process_resume(job: Job, job_token: str) -> dict:
     data: dict = job.data
     application_id: str = data["applicationId"]
     resume_path: str = data["resumePath"]
-    tenant_id: str = data["tenantId"]
 
     logger.info(
-        "▶  Job %s | app=%s | tenant=%s | path=%s",
+        "▶  Job %s | app=%s | path=%s",
         job.id,
         application_id,
-        tenant_id,
         resume_path,
     )
 
     # ── Fetch DB records ────────────────────────────────────────────────────
-    async with TenantDB(tenant_id) as conn:
+    async with TransactionDB() as conn:
         proc_job_row = await conn.fetchrow(
             """
             SELECT id
@@ -142,9 +138,8 @@ async def process_resume(job: Job, job_token: str) -> dict:
         resume_id: str = str(app_row["resume_id"])
 
     # ── Step 1: PDF Extraction ───────────────────────────────────────────────
-    await update_application_status(tenant_id, application_id, "extracting")
+    await update_application_status(application_id, "extracting")
     await update_processing_job(
-        tenant_id,
         proc_job_id,
         status="extracting",
         progress=10,
@@ -157,7 +152,7 @@ async def process_resume(job: Job, job_token: str) -> dict:
     except Exception as exc:
         err_msg = f"Extraction failed: {exc}\n{traceback.format_exc()}"
         logger.error(err_msg)
-        await _fail_job(tenant_id, application_id, proc_job_id, err_msg)
+        await _fail_job(application_id, proc_job_id, err_msg)
         raise
 
     # ── Step 2: Normalise ────────────────────────────────────────────────────
@@ -169,7 +164,7 @@ async def process_resume(job: Job, job_token: str) -> dict:
         normalized.word_count,
     )
 
-    async with TenantDB(tenant_id) as conn:
+    async with TransactionDB() as conn:
         await conn.execute(
             """
             UPDATE resumes
@@ -204,9 +199,9 @@ async def process_resume(job: Job, job_token: str) -> dict:
                 application_id,
             )
 
-    await update_application_status(tenant_id, application_id, "extracted")
+    await update_application_status(application_id, "extracted")
     await update_processing_job(
-        tenant_id, proc_job_id, status="extracted", progress=50
+        proc_job_id, status="extracted", progress=50
     )
     await job.updateProgress(50)
 
@@ -216,17 +211,16 @@ async def process_resume(job: Job, job_token: str) -> dict:
         # pgvector accepts the string representation '[0.1,0.2,…]'
         embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
-        async with TenantDB(tenant_id) as conn:
+        async with TransactionDB() as conn:
             await conn.execute(
                 """
                 INSERT INTO resume_embeddings
-                    (tenant_id, resume_id, model_name, embedding)
-                VALUES ($1, $2, $3, $4::vector)
+                    (resume_id, model_name, embedding)
+                VALUES ($1, $2, $3::vector)
                 ON CONFLICT (resume_id, model_name)
                 DO UPDATE SET embedding   = EXCLUDED.embedding,
                               created_at  = now()
                 """,
-                tenant_id,
                 resume_id,
                 config.embedding_model,
                 embedding_str,
@@ -237,9 +231,9 @@ async def process_resume(job: Job, job_token: str) -> dict:
         logger.warning("Embedding step failed (non-fatal): %s", exc)
 
     # ── Step 4: Score with vLLM ──────────────────────────────────────────────
-    await update_application_status(tenant_id, application_id, "scoring")
+    await update_application_status(application_id, "scoring")
     await update_processing_job(
-        tenant_id, proc_job_id, status="scoring", progress=60
+        proc_job_id, status="scoring", progress=60
     )
     await job.updateProgress(60)
 
@@ -259,15 +253,14 @@ async def process_resume(job: Job, job_token: str) -> dict:
     except Exception as exc:
         err_msg = f"Scoring failed: {exc}\n{traceback.format_exc()}"
         logger.error(err_msg)
-        await _fail_job(tenant_id, application_id, proc_job_id, err_msg)
+        await _fail_job(application_id, proc_job_id, err_msg)
         raise
 
     # ── Step 5: Persist AI evaluation ────────────────────────────────────────
-    async with TenantDB(tenant_id) as conn:
+    async with TransactionDB() as conn:
         await conn.execute(
             """
             INSERT INTO application_ai_evaluations (
-                tenant_id,
                 application_id,
                 model_name,
                 tier,
@@ -279,9 +272,8 @@ async def process_resume(job: Job, job_token: str) -> dict:
                 raw_response,
                 scored_at
             )
-            VALUES ($1, $2, $3, $4::ai_tier, $5, $6, $7, $8, $9, $10, now())
+            VALUES ($1, $2, $3::ai_tier, $4, $5, $6, $7, $8, $9, now())
             """,
-            tenant_id,
             application_id,
             config.vllm_model,
             scoring_result.tier,
@@ -294,9 +286,8 @@ async def process_resume(job: Job, job_token: str) -> dict:
         )
 
     # ── Step 6: Mark complete ────────────────────────────────────────────────
-    await update_application_status(tenant_id, application_id, "reviewable")
+    await update_application_status(application_id, "reviewable")
     await update_processing_job(
-        tenant_id,
         proc_job_id,
         status="completed",
         progress=100,

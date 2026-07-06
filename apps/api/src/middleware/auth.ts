@@ -24,7 +24,6 @@ export function authenticate(
   try {
     const decoded = jwt.verify(token, config.jwt.accessSecret) as JwtPayload;
     req.user = decoded;
-    req.tenantId = decoded.tenantId;
     next();
   } catch (err) {
     if (err instanceof jwt.TokenExpiredError) {

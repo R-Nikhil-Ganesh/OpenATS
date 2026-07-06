@@ -34,7 +34,7 @@ export function useAuth() {
   });
 
   const login = useCallback(
-    async (credentials: { tenantSlug: string; email: string; password: string }) => {
+    async (credentials: { email: string; password: string }) => {
       setIsLoggingIn(true);
       try {
         const res = await authApi.login(credentials);

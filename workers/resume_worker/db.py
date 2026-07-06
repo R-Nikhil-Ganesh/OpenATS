@@ -25,28 +25,20 @@ async def close_pool() -> None:
         _pool = None
 
 
-class TenantDB:
+class TransactionDB:
     """
     Async context manager that acquires a connection from the pool and
-    immediately sets ``app.current_tenant_id`` so that PostgreSQL RLS
-    policies are applied for the correct tenant.
+    wraps operations in a transaction.
     """
 
-    def __init__(self, tenant_id: str) -> None:
-        self.tenant_id = tenant_id
+    def __init__(self) -> None:
         self.conn: Optional[asyncpg.Connection] = None
         self._pool: Optional[asyncpg.Pool] = None
 
     async def __aenter__(self) -> asyncpg.Connection:
         self._pool = await get_pool()
         self.conn = await self._pool.acquire()
-        # Wrap in an explicit transaction so SET LOCAL persists for all
-        # subsequent queries on this connection within the context.
         await self.conn.execute("BEGIN")
-        await self.conn.execute(
-            f"SELECT set_config('app.current_tenant_id', $1, true)",
-            self.tenant_id,
-        )
         return self.conn
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -60,10 +52,10 @@ class TenantDB:
 
 
 async def update_application_status(
-    tenant_id: str, application_id: str, status: str
+    application_id: str, status: str
 ) -> None:
     """Transition an application to a new status."""
-    async with TenantDB(tenant_id) as conn:
+    async with TransactionDB() as conn:
         await conn.execute(
             "UPDATE applications SET status = $1::application_status, updated_at = now() WHERE id = $2",
             status,
@@ -72,7 +64,7 @@ async def update_application_status(
 
 
 async def update_processing_job(
-    tenant_id: str, job_id: str, **kwargs
+    job_id: str, **kwargs
 ) -> None:
     """
     Update arbitrary columns on ``resume_processing_jobs``.
@@ -95,8 +87,8 @@ async def update_processing_job(
         f"WHERE id = ${len(values)}"
     )
 
-    # This update is infrastructure-level (not tenant-data), so we use the
-    # pool directly rather than TenantDB to avoid an extra round-trip.
+    # This update is infrastructure-level, so we use the
+    # pool directly rather than TransactionDB to avoid an extra round-trip.
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(sql, *values)

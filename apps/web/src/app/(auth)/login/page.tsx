@@ -12,7 +12,6 @@ export default function LoginPage() {
   const { login, isLoading } = useAuth();
 
   const [form, setForm] = useState({
-    tenantSlug: '',
     email: '',
     password: '',
   });
@@ -107,14 +106,7 @@ export default function LoginPage() {
             onSubmit={handleSubmit}
             style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
           >
-            <Input
-              id="tenantSlug"
-              label="Organization Slug"
-              placeholder="acme-corp"
-              value={form.tenantSlug}
-              onChange={set('tenantSlug')}
-              autoComplete="organization"
-            />
+
             <Input
               id="email"
               label="Email"
@@ -160,22 +152,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <p
-            style={{
-              textAlign: 'center',
-              marginTop: '20px',
-              fontSize: '13px',
-              color: '#64748B',
-            }}
-          >
-            New organization?{' '}
-            <Link
-              href="/register"
-              style={{ color: '#818CF8', textDecoration: 'none', fontWeight: 600 }}
-            >
-              Register here
-            </Link>
-          </p>
+
         </div>
       </div>
     </div>

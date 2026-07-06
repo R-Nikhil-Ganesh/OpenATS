@@ -5,28 +5,26 @@ import { config } from '../config';
 // ─── SSE Client Registry ──────────────────────────────────────────────────────
 
 /**
- * Map of tenantId → Set of active SSE Response objects.
+ * Set of active SSE Response objects.
  * Each connected browser tab registers here and is removed on disconnect.
  */
-export const sseClients: Map<string, Set<Response>> = new Map();
+export const sseClients: Set<Response> = new Set();
 
-// ─── Send SSE event to all clients for a tenant ───────────────────────────────
+// ─── Send SSE event to all clients ────────────────────────────────────────────
 
 export function sendSSEEvent(
-  tenantId: string,
   event: { type: string; data: unknown }
 ): void {
-  const clients = sseClients.get(tenantId);
-  if (!clients || clients.size === 0) return;
+  if (sseClients.size === 0) return;
 
   const payload = `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`;
 
-  for (const client of clients) {
+  for (const client of sseClients) {
     try {
       client.write(payload);
     } catch {
       // Client disconnected mid-write; cleanup handled by 'close' listener
-      clients.delete(client);
+      sseClients.delete(client);
     }
   }
 }
@@ -37,10 +35,8 @@ import { Request, NextFunction } from 'express';
 import { authenticate } from '../middleware/auth';
 
 export function sseHandler(req: Request, res: Response, _next: NextFunction): void {
-  // Run auth inline (authenticate sets req.user / req.tenantId)
+  // Run auth inline
   authenticate(req, res, () => {
-    const tenantId = req.tenantId!;
-
     // Set SSE response headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -49,14 +45,10 @@ export function sseHandler(req: Request, res: Response, _next: NextFunction): vo
     res.flushHeaders();
 
     // Register client
-    if (!sseClients.has(tenantId)) {
-      sseClients.set(tenantId, new Set());
-    }
-    const clientSet = sseClients.get(tenantId)!;
-    clientSet.add(res);
+    sseClients.add(res);
 
     // Send initial connected event
-    res.write(`event: connected\ndata: ${JSON.stringify({ tenantId })}\n\n`);
+    res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`);
 
     // Heartbeat every 30 seconds to prevent proxy timeouts
     const heartbeat = setInterval(() => {
@@ -70,10 +62,7 @@ export function sseHandler(req: Request, res: Response, _next: NextFunction): vo
     // Cleanup on client disconnect
     req.on('close', () => {
       clearInterval(heartbeat);
-      clientSet.delete(res);
-      if (clientSet.size === 0) {
-        sseClients.delete(tenantId);
-      }
+      sseClients.delete(res);
     });
   });
 }
@@ -115,17 +104,13 @@ queueEvents.on('error', (err) => {
 });
 
 /**
- * We don't know the tenantId from the BullMQ event alone; instead we broadcast
- * to ALL connected tenants and let the client filter by applicationId.
- * In a production system you'd store tenantId in the job data and retrieve it here.
+ * Broadcasts job events to all connected clients.
  */
 function broadcastJobEvent(_jobId: string, type: string, data: unknown): void {
-  for (const [, clients] of sseClients) {
-    const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const client of clients) {
-      try {
-        client.write(payload);
-      } catch { /* ignore disconnected clients */ }
-    }
+  const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(payload);
+    } catch { /* ignore disconnected clients */ }
   }
 }

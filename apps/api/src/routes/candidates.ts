@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { withTenant } from '../db/pool';
+import { withTransaction } from '../db/pool';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -9,12 +9,12 @@ router.use(authenticate);
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await withTenant(req.tenantId!, async (client) => {
+    const result = await withTransaction(async (client) => {
       const candidateRes = await client.query(
         `SELECT id, full_name, email, phone, linkedin_url, location, created_at, updated_at
          FROM candidates
-         WHERE id = $1 AND tenant_id = $2`,
-        [req.params.id, req.tenantId]
+         WHERE id = $1`,
+        [req.params.id]
       );
 
       if (!candidateRes.rows[0]) return null;
@@ -35,9 +35,9 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
            WHERE application_id = a.id
            ORDER BY created_at DESC LIMIT 1
          ) ae ON true
-         WHERE a.candidate_id = $1 AND a.tenant_id = $2
+         WHERE a.candidate_id = $1
          ORDER BY a.applied_at DESC`,
-        [req.params.id, req.tenantId]
+        [req.params.id]
       );
 
       return {
