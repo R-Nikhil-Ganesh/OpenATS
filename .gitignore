@@ -133,3 +133,4 @@ uploads/
 .cache/
 tmp/
 temp/
+seed_jobs.sql
