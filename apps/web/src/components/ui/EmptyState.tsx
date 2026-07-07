@@ -31,12 +31,12 @@ export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {
           width: '72px',
           height: '72px',
           borderRadius: '20px',
-          background: 'rgba(99,102,241,0.1)',
-          border: '1px solid rgba(99,102,241,0.2)',
+          background: 'rgba(var(--color-primary-rgb),0.1)',
+          border: '1px solid rgba(var(--color-primary-rgb),0.2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#6366F1',
+          color: 'var(--color-primary)',
         }}
       >
         {icon}
@@ -47,13 +47,13 @@ export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {
             margin: '0 0 6px',
             fontSize: '16px',
             fontWeight: 600,
-            color: '#E2E8F0',
+            color: 'var(--color-text-strong)',
           }}
         >
           {title}
         </p>
         {subtitle && (
-          <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>{subtitle}</p>
+          <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-muted)' }}>{subtitle}</p>
         )}
       </div>
       {action && (

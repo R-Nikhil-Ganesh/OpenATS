@@ -43,7 +43,7 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
           cy={44}
           r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.07)"
+          stroke="rgba(var(--ink-rgb),0.07)"
           strokeWidth={6}
         />
         <motion.circle
@@ -85,7 +85,7 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
 
   if (!analysis) {
     return (
-      <div style={{ color: '#64748B', textAlign: 'center', padding: '40px' }}>
+      <div style={{ color: 'var(--color-muted)', textAlign: 'center', padding: '40px' }}>
         No AI analysis available
       </div>
     );
@@ -96,20 +96,20 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
       {/* Matched Skills */}
       {analysis.matched_skills && analysis.matched_skills.length > 0 && (
         <section>
-          <h4 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <h4 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Matched Skills
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {analysis.matched_skills.map((s) => (
               <div key={s.skill} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ minWidth: 120, fontSize: '13px', color: '#E2E8F0', fontWeight: 500 }}>
+                <span style={{ minWidth: 120, fontSize: '13px', color: 'var(--color-text-strong)', fontWeight: 500 }}>
                   {s.skill}
                 </span>
                 <div
                   style={{
                     flex: 1,
                     height: 5,
-                    background: 'rgba(255,255,255,0.07)',
+                    background: 'rgba(var(--ink-rgb),0.07)',
                     borderRadius: 10,
                     overflow: 'hidden',
                   }}
@@ -120,12 +120,12 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
                     transition={{ duration: 0.7, ease: 'easeOut' }}
                     style={{
                       height: '100%',
-                      background: 'linear-gradient(90deg, #6366F1, #818CF8)',
+                      background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))',
                       borderRadius: 10,
                     }}
                   />
                 </div>
-                <span style={{ fontSize: '12px', color: '#64748B', minWidth: 36, textAlign: 'right' }}>
+                <span style={{ fontSize: '12px', color: 'var(--color-muted)', minWidth: 36, textAlign: 'right' }}>
                   {Math.round(s.confidence * 100)}%
                 </span>
               </div>
@@ -137,7 +137,7 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
       {/* Missing Requirements */}
       {analysis.missing_requirements && analysis.missing_requirements.length > 0 && (
         <section>
-          <h4 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <h4 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Missing Requirements
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -149,14 +149,14 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
                   alignItems: 'center',
                   gap: '8px',
                   padding: '8px 12px',
-                  background: 'rgba(244,63,94,0.06)',
-                  border: '1px solid rgba(244,63,94,0.15)',
+                  background: 'rgba(var(--color-danger-rgb),0.06)',
+                  border: '1px solid rgba(var(--color-danger-rgb),0.15)',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  color: '#FDA4AF',
+                  color: 'var(--color-danger-text)',
                 }}
               >
-                <XCircle size={13} color="#F43F5E" style={{ flexShrink: 0 }} />
+                <XCircle size={13} color="var(--color-danger)" style={{ flexShrink: 0 }} />
                 {req}
               </div>
             ))}
@@ -174,11 +174,11 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
               alignItems: 'center',
               justifyContent: 'space-between',
               width: '100%',
-              background: 'rgba(16,185,129,0.06)',
-              border: '1px solid rgba(16,185,129,0.15)',
+              background: 'rgba(var(--color-success-rgb),0.06)',
+              border: '1px solid rgba(var(--color-success-rgb),0.15)',
               borderRadius: '9px',
               padding: '10px 14px',
-              color: '#10B981',
+              color: 'var(--color-success)',
               cursor: 'pointer',
               fontSize: '13px',
               fontWeight: 600,
@@ -197,8 +197,8 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
               >
                 <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {analysis.strengths.map((s) => (
-                    <div key={s} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '13px', color: '#CBD5E1' }}>
-                      <CheckCircle size={13} color="#10B981" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div key={s} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '13px', color: 'var(--color-text-body)' }}>
+                      <CheckCircle size={13} color="var(--color-success)" style={{ flexShrink: 0, marginTop: 1 }} />
                       {s}
                     </div>
                   ))}
@@ -219,11 +219,11 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
               alignItems: 'center',
               justifyContent: 'space-between',
               width: '100%',
-              background: 'rgba(245,158,11,0.06)',
-              border: '1px solid rgba(245,158,11,0.15)',
+              background: 'rgba(var(--color-warning-rgb),0.06)',
+              border: '1px solid rgba(var(--color-warning-rgb),0.15)',
               borderRadius: '9px',
               padding: '10px 14px',
-              color: '#F59E0B',
+              color: 'var(--color-warning)',
               cursor: 'pointer',
               fontSize: '13px',
               fontWeight: 600,
@@ -242,7 +242,7 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
               >
                 <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {analysis.weaknesses.map((w) => (
-                    <div key={w} style={{ fontSize: '13px', color: '#CBD5E1' }}>• {w}</div>
+                    <div key={w} style={{ fontSize: '13px', color: 'var(--color-text-body)' }}>• {w}</div>
                   ))}
                 </div>
               </motion.div>
@@ -256,15 +256,15 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
         <section
           style={{
             padding: '14px',
-            background: 'rgba(99,102,241,0.06)',
-            border: '1px solid rgba(99,102,241,0.2)',
+            background: 'rgba(var(--color-primary-rgb),0.06)',
+            border: '1px solid rgba(var(--color-primary-rgb),0.2)',
             borderRadius: '10px',
           }}
         >
-          <h4 style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 700, color: '#818CF8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <h4 style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 700, color: 'var(--color-primary-light)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             AI Recommendation
           </h4>
-          <p style={{ margin: 0, fontSize: '13px', color: '#CBD5E1', lineHeight: 1.6 }}>
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-body)', lineHeight: 1.6 }}>
             {analysis.recommendation}
           </p>
         </section>
@@ -275,7 +275,7 @@ function AnalysisTab({ app }: { app: NonNullable<ReturnType<typeof useQuery>['da
 
 function HistoryTab({ entries }: { entries: StatusHistoryEntry[] }) {
   if (!entries.length) {
-    return <p style={{ color: '#64748B', textAlign: 'center', padding: '32px' }}>No history yet</p>;
+    return <p style={{ color: 'var(--color-muted)', textAlign: 'center', padding: '32px' }}>No history yet</p>;
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
@@ -297,7 +297,7 @@ function HistoryTab({ entries }: { entries: StatusHistoryEntry[] }) {
                 top: '16px',
                 bottom: 0,
                 width: '1px',
-                background: 'rgba(255,255,255,0.07)',
+                background: 'rgba(var(--ink-rgb),0.07)',
               }}
             />
           )}
@@ -306,23 +306,23 @@ function HistoryTab({ entries }: { entries: StatusHistoryEntry[] }) {
               width: 15,
               height: 15,
               borderRadius: '50%',
-              background: '#6366F1',
-              border: '2px solid #0A0B0D',
+              background: 'var(--color-primary)',
+              border: '2px solid var(--color-bg)',
               flexShrink: 0,
               marginTop: '2px',
             }}
           />
           <div>
-            <p style={{ margin: '0 0 2px', fontSize: '13px', color: '#E2E8F0' }}>
+            <p style={{ margin: '0 0 2px', fontSize: '13px', color: 'var(--color-text-strong)' }}>
               <strong>{entry.from_status}</strong>
               {' → '}
               <strong>{entry.to_status}</strong>
             </p>
-            <p style={{ margin: '0 0 2px', fontSize: '12px', color: '#64748B' }}>
+            <p style={{ margin: '0 0 2px', fontSize: '12px', color: 'var(--color-muted)' }}>
               {entry.changed_by} · {formatDate(entry.changed_at)}
             </p>
             {entry.note && (
-              <p style={{ margin: 0, fontSize: '12px', color: '#94A3B8', fontStyle: 'italic' }}>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-muted)', fontStyle: 'italic' }}>
                 {entry.note}
               </p>
             )}
@@ -391,8 +391,8 @@ export function CandidateSplitScreen({ applicationId }: Props) {
         display: 'flex',
         height: 'calc(100vh - 180px)',
         gap: '0',
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(var(--ink-rgb),0.02)',
+        border: '1px solid rgba(var(--ink-rgb),0.08)',
         borderRadius: '16px',
         overflow: 'hidden',
       }}
@@ -402,37 +402,37 @@ export function CandidateSplitScreen({ applicationId }: Props) {
         style={{
           width: '40%',
           minWidth: '40%',
-          borderRight: '1px solid rgba(255,255,255,0.08)',
+          borderRight: '1px solid rgba(var(--ink-rgb),0.08)',
           display: 'flex',
           flexDirection: 'column',
-          background: '#0D0E12',
+          background: 'var(--color-surface-3)',
         }}
       >
         <div
           style={{
             padding: '12px 16px',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            borderBottom: '1px solid rgba(var(--ink-rgb),0.06)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#94A3B8' }}>Resume Preview</span>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-muted)' }}>Resume Preview</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
               disabled={pageNumber <= 1}
-              style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}
+              style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', padding: 4 }}
             >
               <ChevronLeft size={16} />
             </button>
-            <span style={{ fontSize: '12px', color: '#64748B' }}>
+            <span style={{ fontSize: '12px', color: 'var(--color-muted)' }}>
               {pageNumber} / {numPages}
             </span>
             <button
               onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
               disabled={pageNumber >= numPages}
-              style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}
+              style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', padding: 4 }}
             >
               <ChevronRight size={16} />
             </button>
@@ -476,7 +476,7 @@ export function CandidateSplitScreen({ applicationId }: Props) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#334155',
+                color: 'var(--color-text-disabled)',
                 fontSize: '14px',
                 textAlign: 'center',
               }}
@@ -500,7 +500,7 @@ export function CandidateSplitScreen({ applicationId }: Props) {
         <div
           style={{
             padding: '20px 24px 16px',
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
+            borderBottom: '1px solid rgba(var(--ink-rgb),0.07)',
             display: 'flex',
             alignItems: 'flex-start',
             gap: '16px',
@@ -509,17 +509,17 @@ export function CandidateSplitScreen({ applicationId }: Props) {
           <ScoreRing score={app.score ?? 0} color={scoreColor} />
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#F1F5F9' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'var(--color-text-primary)' }}>
                 {candidate?.full_name ?? 'Unknown'}
               </h2>
               <Badge tier={app.tier ?? undefined} />
               <Badge status={app.status} />
             </div>
-            <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted)' }}>
               {candidate?.email}
               {candidate?.phone && ` · ${candidate.phone}`}
             </p>
-            <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#475569' }}>
+            <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
               Score: {formatScore(app.score)}
             </p>
           </div>
@@ -530,7 +530,7 @@ export function CandidateSplitScreen({ applicationId }: Props) {
           style={{
             display: 'flex',
             gap: '0',
-            borderBottom: '1px solid rgba(255,255,255,0.07)',
+            borderBottom: '1px solid rgba(var(--ink-rgb),0.07)',
             padding: '0 24px',
           }}
         >
@@ -542,8 +542,8 @@ export function CandidateSplitScreen({ applicationId }: Props) {
                 padding: '12px 16px',
                 background: 'none',
                 border: 'none',
-                borderBottom: tab === t.id ? '2px solid #6366F1' : '2px solid transparent',
-                color: tab === t.id ? '#818CF8' : '#64748B',
+                borderBottom: tab === t.id ? '2px solid var(--color-primary)' : '2px solid transparent',
+                color: tab === t.id ? 'var(--color-primary-light)' : 'var(--color-muted)',
                 fontWeight: tab === t.id ? 600 : 400,
                 fontSize: '14px',
                 cursor: 'pointer',
@@ -571,11 +571,11 @@ export function CandidateSplitScreen({ applicationId }: Props) {
                   style={{
                     margin: 0,
                     padding: '16px',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.06)',
+                    background: 'rgba(var(--shadow-rgb),0.084)',
+                    border: '1px solid rgba(var(--ink-rgb),0.06)',
                     borderRadius: '10px',
                     fontSize: '12px',
-                    color: '#94A3B8',
+                    color: 'var(--color-muted)',
                     overflowX: 'auto',
                     whiteSpace: 'pre-wrap',
                     lineHeight: 1.7,
@@ -596,10 +596,10 @@ export function CandidateSplitScreen({ applicationId }: Props) {
         <div
           style={{
             padding: '14px 24px',
-            borderTop: '1px solid rgba(255,255,255,0.07)',
+            borderTop: '1px solid rgba(var(--ink-rgb),0.07)',
             display: 'flex',
             gap: '10px',
-            background: 'rgba(0,0,0,0.2)',
+            background: 'rgba(var(--shadow-rgb),0.056)',
           }}
         >
           <Button

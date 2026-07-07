@@ -39,31 +39,13 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#0A0B0D',
+        background: 'var(--color-bg)',
         position: 'relative',
-        overflow: 'hidden',
       }}
     >
-      {/* Animated background grid */}
-      <div
-        className="bg-grid"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          opacity: 0.5,
-        }}
-      />
-
-      {/* Animated blobs */}
-      <div className="blob blob-1" />
-      <div className="blob blob-2" />
-      <div className="blob blob-3" />
-
       {/* Login card */}
       <div
         style={{
-          position: 'relative',
-          zIndex: 10,
           width: '100%',
           maxWidth: '420px',
           padding: '24px',
@@ -71,13 +53,11 @@ export default function LoginPage() {
       >
         <div
           style={{
-            background: 'rgba(17,19,24,0.85)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
             borderRadius: '20px',
             padding: '40px 36px',
-            boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
+            boxShadow: '0 12px 32px rgba(var(--ink-rgb),0.08)',
           }}
         >
           {/* Logo */}
@@ -86,7 +66,7 @@ export default function LoginPage() {
               style={{
                 fontSize: '36px',
                 fontWeight: 900,
-                background: 'linear-gradient(135deg, #6366F1, #818CF8)',
+                background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -96,7 +76,7 @@ export default function LoginPage() {
             >
               openats
             </h1>
-            <p style={{ fontSize: '14px', color: '#64748B', letterSpacing: '0.02em' }}>
+            <p style={{ fontSize: '14px', color: 'var(--color-muted)', letterSpacing: '0.02em' }}>
               AI-Powered Recruiting Intelligence
             </p>
           </div>
@@ -130,11 +110,11 @@ export default function LoginPage() {
               <div
                 style={{
                   padding: '10px 14px',
-                  background: 'rgba(244,63,94,0.08)',
-                  border: '1px solid rgba(244,63,94,0.25)',
+                  background: 'rgba(var(--color-danger-rgb),0.08)',
+                  border: '1px solid rgba(var(--color-danger-rgb),0.25)',
                   borderRadius: '9px',
                   fontSize: '13px',
-                  color: '#F43F5E',
+                  color: 'var(--color-danger)',
                 }}
               >
                 {error}

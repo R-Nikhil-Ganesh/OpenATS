@@ -41,11 +41,11 @@ export function SimilarSearch() {
     <Card padding="24px">
       <div style={{ marginBottom: '18px' }}>
         <h3
-          style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 700, color: '#F1F5F9' }}
+          style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)' }}
         >
           Semantic Similarity Search
         </h3>
-        <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted)' }}>
           Find past candidates who closely match a current job opening
         </p>
       </div>
@@ -83,7 +83,7 @@ export function SimilarSearch() {
             style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}
           >
             {results.results.length === 0 && (
-              <p style={{ color: '#64748B', textAlign: 'center', padding: '20px' }}>
+              <p style={{ color: 'var(--color-muted)', textAlign: 'center', padding: '20px' }}>
                 No similar candidates found
               </p>
             )}
@@ -98,8 +98,8 @@ export function SimilarSearch() {
                   alignItems: 'center',
                   gap: '14px',
                   padding: '14px 16px',
-                  background: 'rgba(255,255,255,0.025)',
-                  border: '1px solid rgba(255,255,255,0.07)',
+                  background: 'rgba(var(--ink-rgb),0.025)',
+                  border: '1px solid rgba(var(--ink-rgb),0.07)',
                   borderRadius: '10px',
                 }}
               >
@@ -109,8 +109,8 @@ export function SimilarSearch() {
                     width: 28,
                     height: 28,
                     borderRadius: '50%',
-                    background: 'rgba(99,102,241,0.15)',
-                    color: '#818CF8',
+                    background: 'rgba(var(--color-primary-rgb),0.15)',
+                    color: 'var(--color-primary-light)',
                     fontSize: '13px',
                     fontWeight: 700,
                     display: 'flex',
@@ -123,17 +123,17 @@ export function SimilarSearch() {
                 </span>
 
                 <div style={{ flex: 1 }}>
-                  <p style={{ margin: '0 0 2px', fontSize: '14px', fontWeight: 600, color: '#F1F5F9' }}>
+                  <p style={{ margin: '0 0 2px', fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                     {candidate.candidate_name}
                   </p>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#64748B' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-muted)' }}>
                     {candidate.role} · {candidate.department}
                   </p>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                   <Badge tier={candidate.tier} size="sm" />
-                  <span style={{ fontSize: '11px', color: '#64748B' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--color-muted)' }}>
                     Score: {formatScore(candidate.score)}
                   </span>
                 </div>
@@ -143,7 +143,7 @@ export function SimilarSearch() {
                   <div
                     style={{
                       height: 5,
-                      background: 'rgba(255,255,255,0.07)',
+                      background: 'rgba(var(--ink-rgb),0.07)',
                       borderRadius: 10,
                       overflow: 'hidden',
                       marginBottom: 3,
@@ -155,12 +155,12 @@ export function SimilarSearch() {
                       transition={{ duration: 0.7, ease: 'easeOut', delay: i * 0.05 }}
                       style={{
                         height: '100%',
-                        background: 'linear-gradient(90deg, #6366F1, #818CF8)',
+                        background: 'linear-gradient(90deg, var(--color-primary), var(--color-primary-light))',
                         borderRadius: 10,
                       }}
                     />
                   </div>
-                  <span style={{ fontSize: '11px', color: '#64748B' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--color-muted)' }}>
                     {Math.round(candidate.similarity_score * 100)}% match
                   </span>
                 </div>

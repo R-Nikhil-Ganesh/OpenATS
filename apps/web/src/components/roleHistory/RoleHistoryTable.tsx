@@ -41,9 +41,9 @@ export function RoleHistoryTable() {
   const entries = data?.entries ?? [];
 
   const milestoneColor: Record<string, string> = {
-    hired: '#10B981',
-    interviewing: '#F59E0B',
-    screening: '#6366F1',
+    hired: 'var(--color-success)',
+    interviewing: 'var(--color-warning)',
+    screening: 'var(--color-primary)',
   };
 
   return (
@@ -69,8 +69,8 @@ export function RoleHistoryTable() {
       {/* Table */}
       <div
         style={{
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.07)',
+          background: 'rgba(var(--ink-rgb),0.02)',
+          border: '1px solid rgba(var(--ink-rgb),0.07)',
           borderRadius: '12px',
           overflow: 'hidden',
         }}
@@ -82,10 +82,10 @@ export function RoleHistoryTable() {
             gridTemplateColumns: '2fr 2fr 1.5fr 80px 80px 120px 120px 24px',
             gap: '12px',
             padding: '12px 18px',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            borderBottom: '1px solid rgba(var(--ink-rgb),0.06)',
             fontSize: '11px',
             fontWeight: 700,
-            color: '#64748B',
+            color: 'var(--color-muted)',
             textTransform: 'uppercase',
             letterSpacing: '0.07em',
           }}
@@ -106,7 +106,7 @@ export function RoleHistoryTable() {
                 key={i}
                 style={{
                   padding: '14px 18px',
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  borderBottom: '1px solid rgba(var(--ink-rgb),0.04)',
                 }}
               >
                 <div className="skeleton" style={{ height: 16, width: `${60 + i * 5}%`, borderRadius: 6 }} />
@@ -123,28 +123,28 @@ export function RoleHistoryTable() {
                     gridTemplateColumns: '2fr 2fr 1.5fr 80px 80px 120px 120px 24px',
                     gap: '12px',
                     padding: '14px 18px',
-                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    borderBottom: '1px solid rgba(var(--ink-rgb),0.04)',
                     cursor: 'pointer',
                     transition: 'background 0.15s',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.025)';
+                    e.currentTarget.style.background = 'rgba(var(--ink-rgb),0.025)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'transparent';
                   }}
                 >
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#E2E8F0' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-strong)' }}>
                     {entry.candidate_name}
                   </span>
-                  <span style={{ fontSize: '13px', color: '#94A3B8' }}>{entry.role}</span>
-                  <span style={{ fontSize: '13px', color: '#64748B' }}>{entry.department}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>{entry.role}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>{entry.department}</span>
                   <Badge tier={entry.tier} size="sm" />
                   <span
                     style={{
                       fontSize: '13px',
                       fontWeight: 700,
-                      color: milestoneColor[entry.milestone] ?? '#64748B',
+                      color: milestoneColor[entry.milestone] ?? 'var(--color-muted)',
                     }}
                   >
                     {formatScore(entry.score)}
@@ -156,19 +156,19 @@ export function RoleHistoryTable() {
                         fontWeight: 600,
                         padding: '2px 8px',
                         borderRadius: '20px',
-                        color: milestoneColor[entry.milestone] ?? '#64748B',
-                        background: `${milestoneColor[entry.milestone] ?? '#64748B'}18`,
-                        border: `1px solid ${milestoneColor[entry.milestone] ?? '#64748B'}30`,
+                        color: milestoneColor[entry.milestone] ?? 'var(--color-muted)',
+                        background: `${milestoneColor[entry.milestone] ?? 'var(--color-muted)'}18`,
+                        border: `1px solid ${milestoneColor[entry.milestone] ?? 'var(--color-muted)'}30`,
                         textTransform: 'capitalize',
                       }}
                     >
                       {entry.milestone}
                     </span>
                   </span>
-                  <span style={{ fontSize: '12px', color: '#64748B' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--color-muted)' }}>
                     {formatDate(entry.accepted_at)}
                   </span>
-                  <span style={{ color: '#64748B' }}>
+                  <span style={{ color: 'var(--color-muted)' }}>
                     {expandedId === entry.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </span>
                 </div>
@@ -184,13 +184,13 @@ export function RoleHistoryTable() {
                       <div
                         style={{
                           padding: '14px 18px',
-                          background: 'rgba(99,102,241,0.04)',
-                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          background: 'rgba(var(--color-primary-rgb),0.04)',
+                          borderBottom: '1px solid rgba(var(--ink-rgb),0.04)',
                           fontSize: '13px',
-                          color: '#94A3B8',
+                          color: 'var(--color-muted)',
                         }}
                       >
-                        <span style={{ fontWeight: 600, color: '#818CF8', marginRight: 8 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--color-primary-light)', marginRight: 8 }}>
                           Skill Pattern:
                         </span>
                         {entry.skill_pattern}
@@ -202,7 +202,7 @@ export function RoleHistoryTable() {
             ))}
 
         {!isLoading && entries.length === 0 && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#64748B', fontSize: '14px' }}>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-muted)', fontSize: '14px' }}>
             No historical records found
           </div>
         )}

@@ -11,6 +11,8 @@ type StatCard = {
   value: number;
   icon: React.ReactNode;
   color: string;
+  /** Bare `--color-x-rgb` reference for custom-alpha rgba() at the call site. */
+  rgb: string;
   bg: string;
   pulse?: boolean;
   trend?: string;
@@ -29,9 +31,8 @@ function StatCardItem({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.35 }}
       style={{
-        background: 'rgba(255,255,255,0.03)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
         borderRadius: '14px',
         padding: '22px',
         display: 'flex',
@@ -49,20 +50,20 @@ function StatCardItem({
           right: 0,
           width: '80px',
           height: '80px',
-          background: `radial-gradient(circle, ${card.color}18, transparent 70%)`,
+          background: `radial-gradient(circle, rgba(${card.rgb},0.1), transparent 70%)`,
           borderRadius: '0 14px 0 0',
         }}
       />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '13px', fontWeight: 500, color: '#64748B' }}>{card.label}</span>
+        <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-muted)' }}>{card.label}</span>
         <div
           style={{
             width: 38,
             height: 38,
             borderRadius: '10px',
             background: card.bg,
-            border: `1px solid ${card.color}30`,
+            border: `1px solid rgba(${card.rgb},0.2)`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -96,7 +97,7 @@ function StatCardItem({
             display: 'block',
             fontSize: '36px',
             fontWeight: 800,
-            color: '#F1F5F9',
+            color: 'var(--color-text-primary)',
             lineHeight: 1,
             letterSpacing: '-1px',
           }}
@@ -104,7 +105,7 @@ function StatCardItem({
           {card.value.toLocaleString()}
         </motion.span>
         {card.trend && (
-          <span style={{ fontSize: '12px', color: '#64748B', marginTop: 4, display: 'block' }}>
+          <span style={{ fontSize: '12px', color: 'var(--color-muted)', marginTop: 4, display: 'block' }}>
             {card.trend}
           </span>
         )}
@@ -117,8 +118,8 @@ function SkeletonStat() {
   return (
     <div
       style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(var(--ink-rgb),0.02)',
+        border: '1px solid rgba(var(--ink-rgb),0.06)',
         borderRadius: '14px',
         padding: '22px',
         display: 'flex',
@@ -155,24 +156,27 @@ export function StatsGrid() {
       label: 'Active Jobs',
       value: data.active_jobs,
       icon: <Briefcase size={18} />,
-      color: '#6366F1',
-      bg: 'rgba(99,102,241,0.12)',
+      color: 'var(--color-primary)',
+      rgb: 'var(--color-primary-rgb)',
+      bg: 'rgba(var(--color-primary-rgb),0.12)',
       trend: 'Open positions',
     },
     {
       label: 'Total Applicants',
       value: data.total_applicants,
       icon: <Users size={18} />,
-      color: '#818CF8',
-      bg: 'rgba(129,140,248,0.12)',
+      color: 'var(--color-primary-light)',
+      rgb: 'var(--color-primary-light-rgb)',
+      bg: 'rgba(var(--color-primary-light-rgb),0.12)',
       trend: 'Across all jobs',
     },
     {
       label: 'Queue Backlog',
       value: data.queue_backlog,
       icon: <Clock size={18} />,
-      color: '#F59E0B',
-      bg: 'rgba(245,158,11,0.12)',
+      color: 'var(--color-warning)',
+      rgb: 'var(--color-warning-rgb)',
+      bg: 'rgba(var(--color-warning-rgb),0.12)',
       pulse: true,
       trend: data.queue_backlog > 0 ? 'Processing in queue' : 'All clear',
     },
@@ -180,8 +184,9 @@ export function StatsGrid() {
       label: 'Failed Jobs',
       value: data.failed_count,
       icon: <AlertCircle size={18} />,
-      color: '#F43F5E',
-      bg: 'rgba(244,63,94,0.12)',
+      color: 'var(--color-danger)',
+      rgb: 'var(--color-danger-rgb)',
+      bg: 'rgba(var(--color-danger-rgb),0.12)',
       pulse: true,
       trend: data.failed_count > 0 ? 'Requires attention' : 'No failures',
     },

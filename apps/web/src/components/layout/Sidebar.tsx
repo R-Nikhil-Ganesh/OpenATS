@@ -33,8 +33,8 @@ export function Sidebar() {
         width,
         minWidth: width,
         height: '100vh',
-        background: '#0D0E12',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
+        background: 'var(--color-surface-3)',
+        borderRight: '1px solid rgba(var(--ink-rgb),0.06)',
         display: 'flex',
         flexDirection: 'column',
         transition: 'width 0.25s ease, min-width 0.25s ease',
@@ -57,7 +57,7 @@ export function Sidebar() {
           style={{
             fontSize: '22px',
             fontWeight: 800,
-            background: 'linear-gradient(135deg, #6366F1, #818CF8)',
+            background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
@@ -88,10 +88,10 @@ export function Sidebar() {
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 borderRadius: '9px',
                 textDecoration: 'none',
-                color: isActive ? '#fff' : '#64748B',
-                background: isActive ? 'rgba(99,102,241,0.15)' : 'transparent',
+                color: isActive ? '#fff' : 'var(--color-muted)',
+                background: isActive ? 'rgba(var(--color-primary-rgb),0.15)' : 'transparent',
                 border: isActive
-                  ? '1px solid rgba(99,102,241,0.3)'
+                  ? '1px solid rgba(var(--color-primary-rgb),0.3)'
                   : '1px solid transparent',
                 fontWeight: isActive ? 600 : 400,
                 fontSize: '14px',
@@ -99,7 +99,7 @@ export function Sidebar() {
                 whiteSpace: 'nowrap',
               }}
             >
-              <Icon size={18} style={{ flexShrink: 0, color: isActive ? '#818CF8' : undefined }} />
+              <Icon size={18} style={{ flexShrink: 0, color: isActive ? 'var(--color-primary-light)' : undefined }} />
               {!collapsed && <span>{item.label}</span>}
             </Link>
           );
@@ -111,7 +111,7 @@ export function Sidebar() {
         <div
           style={{
             padding: collapsed ? '16px 0' : '16px 14px',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
+            borderTop: '1px solid rgba(var(--ink-rgb),0.06)',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
@@ -123,7 +123,7 @@ export function Sidebar() {
               width: 34,
               height: 34,
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #6366F1, #818CF8)',
+              background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -137,14 +137,14 @@ export function Sidebar() {
           </div>
           {!collapsed && (
             <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: '#F1F5F9' }}>
+              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
                 {user.fullName}
               </div>
               <p
                 style={{
                   margin: 0,
                   fontSize: '11px',
-                  color: '#64748B',
+                  color: 'var(--color-muted)',
                   textTransform: 'capitalize',
                 }}
               >
@@ -166,9 +166,9 @@ export function Sidebar() {
           width: 24,
           height: 24,
           borderRadius: '50%',
-          background: '#1E2229',
-          border: '1px solid rgba(255,255,255,0.1)',
-          color: '#64748B',
+          background: 'var(--color-border)',
+          border: '1px solid rgba(var(--ink-rgb),0.1)',
+          color: 'var(--color-muted)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

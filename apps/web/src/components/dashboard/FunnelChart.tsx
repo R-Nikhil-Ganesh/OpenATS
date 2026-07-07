@@ -15,9 +15,9 @@ import { dashboardApi } from '@/lib/api';
 import { Card } from '@/components/ui/Card';
 
 const TIER_COLORS: Record<string, string> = {
-  A: '#10B981',
-  B: '#F59E0B',
-  C: '#64748B',
+  A: 'var(--color-success)',
+  B: 'var(--color-warning)',
+  C: 'var(--color-muted)',
 };
 
 type TooltipPayload = {
@@ -38,12 +38,12 @@ function CustomTooltip({
   return (
     <div
       style={{
-        background: '#1E2229',
-        border: '1px solid rgba(255,255,255,0.1)',
+        background: 'var(--color-border)',
+        border: '1px solid rgba(var(--ink-rgb),0.1)',
         borderRadius: '9px',
         padding: '10px 14px',
         fontSize: '13px',
-        color: '#E2E8F0',
+        color: 'var(--color-text-strong)',
       }}
     >
       <strong>Tier {d?.tier}</strong>: {d?.count} candidates
@@ -71,12 +71,12 @@ export function FunnelChart() {
             margin: '0 0 4px',
             fontSize: '15px',
             fontWeight: 700,
-            color: '#F1F5F9',
+            color: 'var(--color-text-primary)',
           }}
         >
           Candidate Tier Distribution
         </h3>
-        <p style={{ margin: 0, fontSize: '12px', color: '#64748B' }}>
+        <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-muted)' }}>
           Breakdown by AI-assigned tier across all active jobs
         </p>
       </div>
@@ -89,25 +89,25 @@ export function FunnelChart() {
         >
           <XAxis
             type="number"
-            tick={{ fontSize: 12, fill: '#64748B' }}
+            tick={{ fontSize: 12, fill: 'var(--color-muted)' }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             dataKey="tier"
             type="category"
-            tick={{ fontSize: 13, fill: '#94A3B8', fontWeight: 700 }}
+            tick={{ fontSize: 13, fill: 'var(--color-muted)', fontWeight: 700 }}
             axisLine={false}
             tickLine={false}
             width={50}
             tickFormatter={(v: string) => `Tier ${v}`}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(var(--ink-rgb),0.03)' }} />
           <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={28}>
             {chartData.map((entry) => (
               <Cell
                 key={entry.tier}
-                fill={TIER_COLORS[entry.tier] ?? '#64748B'}
+                fill={TIER_COLORS[entry.tier] ?? 'var(--color-muted)'}
               />
             ))}
           </Bar>
@@ -126,7 +126,7 @@ export function FunnelChart() {
                 background: color,
               }}
             />
-            <span style={{ fontSize: '12px', color: '#64748B' }}>Tier {tier}</span>
+            <span style={{ fontSize: '12px', color: 'var(--color-muted)' }}>Tier {tier}</span>
           </div>
         ))}
       </div>

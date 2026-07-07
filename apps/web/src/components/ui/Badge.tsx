@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { tierColor, tierBg, statusColor } from '@/lib/utils';
+import { tierColor, tierBg, tierRgb, statusColor, statusRgb } from '@/lib/utils';
 
 type BadgeProps = {
   tier?: 'A' | 'B' | 'C' | string;
@@ -11,17 +11,20 @@ type BadgeProps = {
 };
 
 export function Badge({ tier, status, children, size = 'md' }: BadgeProps) {
-  let color = '#64748B';
-  let bg = 'rgba(100, 116, 139, 0.12)';
+  let color = 'var(--color-muted)';
+  let bg = 'rgba(var(--color-muted-rgb), 0.12)';
+  let rgb = 'var(--color-muted-rgb)';
   let label = children;
 
   if (tier) {
     color = tierColor(tier);
     bg = tierBg(tier);
+    rgb = tierRgb(tier);
     label = label ?? `Tier ${tier}`;
   } else if (status) {
     color = statusColor(status);
-    bg = `${statusColor(status)}1F`;
+    rgb = statusRgb(status);
+    bg = `rgba(${rgb}, 0.12)`;
     label = label ?? status.charAt(0).toUpperCase() + status.slice(1);
   }
 
@@ -30,9 +33,11 @@ export function Badge({ tier, status, children, size = 'md' }: BadgeProps) {
 
   return (
     <span
+      title={typeof label === 'string' ? label : undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
+        maxWidth: '100%',
         padding,
         borderRadius: '20px',
         fontSize,
@@ -40,8 +45,10 @@ export function Badge({ tier, status, children, size = 'md' }: BadgeProps) {
         letterSpacing: '0.02em',
         color,
         backgroundColor: bg,
-        border: `1px solid ${color}33`,
+        border: `1px solid rgba(${rgb}, 0.2)`,
         whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
       }}
     >
       {label}

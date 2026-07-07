@@ -149,7 +149,7 @@ export function EditJobModal({ job, open, onClose }: Props) {
         />
 
         {mutation.isError && (
-          <p style={{ margin: 0, color: '#F43F5E', fontSize: '13px' }}>
+          <p style={{ margin: 0, color: 'var(--color-danger)', fontSize: '13px' }}>
             Failed to save changes. Please try again.
           </p>
         )}

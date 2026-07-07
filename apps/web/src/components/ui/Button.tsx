@@ -15,25 +15,25 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantStyles: Record<Variant, React.CSSProperties> = {
   primary: {
-    background: 'linear-gradient(135deg, #6366F1, #818CF8)',
+    background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
     color: '#fff',
     border: 'none',
-    boxShadow: '0 0 20px rgba(99,102,241,0.35)',
+    boxShadow: '0 0 20px rgba(var(--color-primary-rgb),0.35)',
   },
   ghost: {
     background: 'transparent',
-    color: '#94A3B8',
+    color: 'var(--color-muted)',
     border: '1px solid transparent',
   },
   danger: {
-    background: 'rgba(244, 63, 94, 0.12)',
-    color: '#F43F5E',
-    border: '1px solid rgba(244, 63, 94, 0.3)',
+    background: 'rgba(var(--color-danger-rgb), 0.12)',
+    color: 'var(--color-danger)',
+    border: '1px solid rgba(var(--color-danger-rgb), 0.3)',
   },
   outline: {
     background: 'transparent',
-    color: '#818CF8',
-    border: '1px solid rgba(129,140,248,0.4)',
+    color: 'var(--color-primary-light)',
+    border: '1px solid rgba(var(--color-primary-light-rgb),0.4)',
   },
 };
 

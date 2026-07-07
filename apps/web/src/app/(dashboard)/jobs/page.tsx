@@ -15,8 +15,8 @@ function SkeletonJobCard() {
   return (
     <div
       style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(var(--ink-rgb),0.02)',
+        border: '1px solid rgba(var(--ink-rgb),0.06)',
         borderRadius: '14px',
         padding: '22px',
         display: 'flex',
@@ -62,10 +62,10 @@ export default function JobsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: '#F1F5F9', letterSpacing: '-0.5px' }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: 'var(--color-text-primary)', letterSpacing: '-0.5px' }}>
             Jobs
           </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
+          <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-muted)' }}>
             Manage job requisitions and track applicants
           </p>
         </div>
@@ -82,10 +82,10 @@ export default function JobsPage() {
         style={{
           display: 'flex',
           gap: '6px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'rgba(var(--ink-rgb),0.03)',
           padding: '4px',
           borderRadius: '10px',
-          border: '1px solid rgba(255,255,255,0.07)',
+          border: '1px solid rgba(var(--ink-rgb),0.07)',
           width: 'fit-content',
         }}
       >
@@ -97,8 +97,8 @@ export default function JobsPage() {
               padding: '7px 16px',
               borderRadius: '7px',
               border: 'none',
-              background: statusFilter === f ? 'rgba(99,102,241,0.2)' : 'transparent',
-              color: statusFilter === f ? '#818CF8' : '#64748B',
+              background: statusFilter === f ? 'rgba(var(--color-primary-rgb),0.2)' : 'transparent',
+              color: statusFilter === f ? 'var(--color-primary-light)' : 'var(--color-muted)',
               fontWeight: statusFilter === f ? 600 : 400,
               fontSize: '13px',
               cursor: 'pointer',

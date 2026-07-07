@@ -19,7 +19,7 @@ export function Input({ label, error, id, style, ...props }: InputProps) {
           style={{
             fontSize: '13px',
             fontWeight: 500,
-            color: '#94A3B8',
+            color: 'var(--color-muted)',
             letterSpacing: '0.02em',
           }}
         >
@@ -38,26 +38,26 @@ export function Input({ label, error, id, style, ...props }: InputProps) {
           props.onBlur?.(e);
         }}
         style={{
-          background: 'rgba(255,255,255,0.04)',
+          background: 'rgba(var(--ink-rgb),0.04)',
           border: error
-            ? '1px solid #F43F5E'
+            ? '1px solid var(--color-danger)'
             : focused
-            ? '1px solid #6366F1'
-            : '1px solid rgba(255,255,255,0.1)',
+            ? '1px solid var(--color-primary)'
+            : '1px solid rgba(var(--ink-rgb),0.1)',
           borderRadius: '9px',
           padding: '10px 14px',
-          color: '#F1F5F9',
+          color: 'var(--color-text-primary)',
           fontSize: '14px',
           outline: 'none',
           transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-          boxShadow: focused ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
+          boxShadow: focused ? '0 0 0 3px rgba(var(--color-primary-rgb),0.15)' : 'none',
           width: '100%',
           boxSizing: 'border-box',
           ...style,
         }}
       />
       {error && (
-        <span style={{ fontSize: '12px', color: '#F43F5E' }}>{error}</span>
+        <span style={{ fontSize: '12px', color: 'var(--color-danger)' }}>{error}</span>
       )}
     </div>
   );
@@ -77,7 +77,7 @@ export function Textarea({ label, error, id, style, ...props }: TextareaProps) {
       {label && (
         <label
           htmlFor={inputId}
-          style={{ fontSize: '13px', fontWeight: 500, color: '#94A3B8' }}
+          style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-muted)' }}
         >
           {label}
         </label>
@@ -94,19 +94,19 @@ export function Textarea({ label, error, id, style, ...props }: TextareaProps) {
           props.onBlur?.(e);
         }}
         style={{
-          background: 'rgba(255,255,255,0.04)',
+          background: 'rgba(var(--ink-rgb),0.04)',
           border: error
-            ? '1px solid #F43F5E'
+            ? '1px solid var(--color-danger)'
             : focused
-            ? '1px solid #6366F1'
-            : '1px solid rgba(255,255,255,0.1)',
+            ? '1px solid var(--color-primary)'
+            : '1px solid rgba(var(--ink-rgb),0.1)',
           borderRadius: '9px',
           padding: '10px 14px',
-          color: '#F1F5F9',
+          color: 'var(--color-text-primary)',
           fontSize: '14px',
           outline: 'none',
           transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-          boxShadow: focused ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
+          boxShadow: focused ? '0 0 0 3px rgba(var(--color-primary-rgb),0.15)' : 'none',
           width: '100%',
           boxSizing: 'border-box',
           resize: 'vertical',
@@ -114,7 +114,7 @@ export function Textarea({ label, error, id, style, ...props }: TextareaProps) {
           ...style,
         }}
       />
-      {error && <span style={{ fontSize: '12px', color: '#F43F5E' }}>{error}</span>}
+      {error && <span style={{ fontSize: '12px', color: 'var(--color-danger)' }}>{error}</span>}
     </div>
   );
 }
@@ -134,7 +134,7 @@ export function Select({ label, error, id, options, style, ...props }: SelectPro
       {label && (
         <label
           htmlFor={inputId}
-          style={{ fontSize: '13px', fontWeight: 500, color: '#94A3B8' }}
+          style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-muted)' }}
         >
           {label}
         </label>
@@ -151,15 +151,15 @@ export function Select({ label, error, id, options, style, ...props }: SelectPro
           props.onBlur?.(e);
         }}
         style={{
-          background: '#111318',
+          background: 'var(--color-surface)',
           border: error
-            ? '1px solid #F43F5E'
+            ? '1px solid var(--color-danger)'
             : focused
-            ? '1px solid #6366F1'
-            : '1px solid rgba(255,255,255,0.1)',
+            ? '1px solid var(--color-primary)'
+            : '1px solid rgba(var(--ink-rgb),0.1)',
           borderRadius: '9px',
           padding: '10px 14px',
-          color: '#F1F5F9',
+          color: 'var(--color-text-primary)',
           fontSize: '14px',
           outline: 'none',
           width: '100%',
@@ -173,7 +173,7 @@ export function Select({ label, error, id, options, style, ...props }: SelectPro
           </option>
         ))}
       </select>
-      {error && <span style={{ fontSize: '12px', color: '#F43F5E' }}>{error}</span>}
+      {error && <span style={{ fontSize: '12px', color: 'var(--color-danger)' }}>{error}</span>}
     </div>
   );
 }

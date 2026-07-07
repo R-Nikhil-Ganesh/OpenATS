@@ -140,7 +140,7 @@ export function CreateJobForm() {
         />
 
         {mutation.isError && (
-          <p style={{ margin: 0, color: '#F43F5E', fontSize: '13px' }}>
+          <p style={{ margin: 0, color: 'var(--color-danger)', fontSize: '13px' }}>
             Failed to create job. Please try again.
           </p>
         )}

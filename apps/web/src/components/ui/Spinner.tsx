@@ -15,7 +15,7 @@ type SpinnerProps = {
   color?: string;
 };
 
-export function Spinner({ size = 'md', color = '#6366F1' }: SpinnerProps) {
+export function Spinner({ size = 'md', color = 'var(--color-primary)' }: SpinnerProps) {
   const px = sizeMap[size];
 
   return (
@@ -34,7 +34,8 @@ export function Spinner({ size = 'md', color = '#6366F1' }: SpinnerProps) {
         cx="12"
         cy="12"
         r="10"
-        stroke={`${color}30`}
+        stroke={color}
+        strokeOpacity={0.3}
         strokeWidth="2.5"
       />
       <path

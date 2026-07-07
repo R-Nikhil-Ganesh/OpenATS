@@ -25,10 +25,10 @@ export default function DashboardPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: '#F1F5F9', letterSpacing: '-0.5px' }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: 'var(--color-text-primary)', letterSpacing: '-0.5px' }}>
             Dashboard
           </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#64748B' }}>
+          <p style={{ margin: 0, fontSize: '14px', color: 'var(--color-muted)' }}>
             AI-powered recruiting intelligence at a glance
           </p>
         </div>
@@ -57,14 +57,14 @@ export default function DashboardPage() {
               marginBottom: '16px',
             }}
           >
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#F1F5F9' }}>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
               Recent Jobs
             </h3>
             <Link href="/jobs" style={{ textDecoration: 'none' }}>
               <span
                 style={{
                   fontSize: '12px',
-                  color: '#818CF8',
+                  color: 'var(--color-primary-light)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
@@ -78,10 +78,10 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {recentJobs.length === 0 ? (
               <div style={{ padding: '32px', textAlign: 'center' }}>
-                <Briefcase size={24} color="#334155" style={{ marginBottom: 8 }} />
-                <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+                <Briefcase size={24} color="var(--color-text-disabled)" style={{ marginBottom: 8 }} />
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted)' }}>
                   No jobs yet.{' '}
-                  <Link href="/jobs/new" style={{ color: '#818CF8' }}>
+                  <Link href="/jobs/new" style={{ color: 'var(--color-primary-light)' }}>
                     Create your first job
                   </Link>
                 </p>
@@ -100,11 +100,11 @@ export default function DashboardPage() {
                       gap: '12px',
                       padding: '12px',
                       borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(var(--ink-rgb),0.05)',
                       transition: 'background 0.15s',
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')
+                      (e.currentTarget.style.background = 'rgba(var(--ink-rgb),0.03)')
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.background = 'transparent')
@@ -115,11 +115,11 @@ export default function DashboardPage() {
                         width: 38,
                         height: 38,
                         borderRadius: '10px',
-                        background: 'rgba(99,102,241,0.12)',
+                        background: 'rgba(var(--color-primary-rgb),0.12)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: '#6366F1',
+                        color: 'var(--color-primary)',
                         flexShrink: 0,
                       }}
                     >
@@ -131,7 +131,7 @@ export default function DashboardPage() {
                           margin: '0 0 2px',
                           fontSize: '13px',
                           fontWeight: 600,
-                          color: '#E2E8F0',
+                          color: 'var(--color-text-strong)',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -139,7 +139,7 @@ export default function DashboardPage() {
                       >
                         {job.title}
                       </p>
-                      <p style={{ margin: 0, fontSize: '11px', color: '#64748B' }}>
+                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-muted)' }}>
                         {job.department} · {formatRelative(job.created_at)}
                       </p>
                     </div>

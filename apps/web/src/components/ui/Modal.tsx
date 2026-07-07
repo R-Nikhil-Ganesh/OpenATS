@@ -40,7 +40,7 @@ export function Modal({ open, onClose, title, children, width = '560px' }: Modal
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'rgba(0,0,0,0.6)',
+            background: 'rgba(var(--shadow-rgb),0.168)',
             backdropFilter: 'blur(6px)',
             padding: '24px',
           }}
@@ -52,15 +52,15 @@ export function Modal({ open, onClose, title, children, width = '560px' }: Modal
             transition={{ duration: 0.2, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#111318',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--color-surface)',
+              border: '1px solid rgba(var(--ink-rgb),0.1)',
               borderRadius: '16px',
               padding: '28px',
               width: '100%',
               maxWidth: width,
               maxHeight: '90vh',
               overflow: 'auto',
-              boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+              boxShadow: '0 24px 60px rgba(var(--shadow-rgb),0.14)',
             }}
           >
             {title && (
@@ -77,7 +77,7 @@ export function Modal({ open, onClose, title, children, width = '560px' }: Modal
                     margin: 0,
                     fontSize: '18px',
                     fontWeight: 700,
-                    color: '#F1F5F9',
+                    color: 'var(--color-text-primary)',
                   }}
                 >
                   {title}
@@ -85,10 +85,10 @@ export function Modal({ open, onClose, title, children, width = '560px' }: Modal
                 <button
                   onClick={onClose}
                   style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(var(--ink-rgb),0.06)',
+                    border: '1px solid rgba(var(--ink-rgb),0.1)',
                     borderRadius: '8px',
-                    color: '#64748B',
+                    color: 'var(--color-muted)',
                     cursor: 'pointer',
                     padding: '6px',
                     display: 'flex',

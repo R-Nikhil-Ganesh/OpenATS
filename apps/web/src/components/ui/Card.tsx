@@ -26,19 +26,18 @@ export function Card({
       onMouseEnter={() => hoverable && setHovered(true)}
       onMouseLeave={() => hoverable && setHovered(false)}
       style={{
-        background: 'rgba(255,255,255,0.03)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        background: 'var(--color-surface)',
         border: hovered
-          ? '1px solid rgba(99,102,241,0.35)'
-          : '1px solid rgba(255,255,255,0.08)',
+          ? '1px solid rgba(var(--color-primary-rgb),0.35)'
+          : '1px solid var(--color-border)',
         borderRadius: '12px',
         padding,
+        overflow: 'hidden',
         cursor: onClick ? 'pointer' : 'default',
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
         boxShadow: hovered
-          ? '0 8px 32px rgba(99,102,241,0.15)'
-          : '0 2px 8px rgba(0,0,0,0.2)',
+          ? '0 8px 32px rgba(var(--color-primary-rgb),0.15)'
+          : '0 2px 8px rgba(var(--shadow-rgb),0.056)',
         transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
         ...style,
       }}
