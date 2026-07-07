@@ -24,7 +24,7 @@ const createJobSchema = z.object({
 });
 
 const updateJobSchema = createJobSchema.partial().extend({
-  status: z.enum(['draft', 'open', 'paused', 'closed', 'archived']).optional(),
+  status: z.enum(['draft', 'active', 'paused', 'closed', 'archived']).optional(),
 });
 
 // ─── GET / — List jobs with aggregated counts ─────────────────────────────────

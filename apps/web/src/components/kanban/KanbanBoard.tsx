@@ -19,7 +19,7 @@ type Column = {
 };
 
 const COLUMNS: Column[] = [
-  { id: 'applied', label: 'Applied', color: '#64748B', bg: 'rgba(100,116,139,0.08)' },
+  { id: 'reviewable', label: 'Reviewable', color: '#64748B', bg: 'rgba(100,116,139,0.08)' },
   { id: 'screening', label: 'Screening', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
   { id: 'interviewing', label: 'Interviewing', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
   { id: 'hired', label: 'Hired', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
@@ -38,7 +38,7 @@ function buildBoard(applications: Application[]): BoardState {
     board[col.id] = [];
   });
   applications.forEach((app) => {
-    const col = app.status ?? 'applied';
+    const col = app.status ?? 'reviewable';
     if (board[col]) {
       board[col].push(app);
     }

@@ -110,26 +110,41 @@ router.get('/similar', async (req: Request, res: Response, next: NextFunction): 
 
       const jobEmbedding = embeddingRes.rows[0].embedding;
 
-      // pgvector cosine similarity search against resume_embeddings
+      // Semantic search over *role history* — past candidates who actually reached a
+      // screening/hired milestone on some other job — ranked by resume similarity to
+      // this job's embedding. (Not a generic resume search: it deliberately excludes
+      // resumes with no role-history milestone, and excludes this job's own pipeline.)
       const similarRes = await client.query(
         `SELECT
-           re.resume_id,
-           1 - (re.embedding <=> $1::vector) AS similarity_score,
-           c.id AS candidate_id, c.full_name, c.email, c.location,
-           a.id AS application_id, r.id AS resume_id, r.original_filename AS file_name,
-           ae.tier, ae.score
-         FROM resume_embeddings re
-         JOIN resumes r ON r.id = re.resume_id
-         JOIN candidates c ON c.id = r.candidate_id
-         LEFT JOIN applications a ON a.resume_id = re.resume_id
-         LEFT JOIN LATERAL (
-           SELECT tier, score FROM application_ai_evaluations
-           WHERE application_id = a.id
-           ORDER BY created_at DESC LIMIT 1
-         ) ae ON true
-         ORDER BY re.embedding <=> $1::vector
-         LIMIT $2`,
-        [jobEmbedding, limitNum]
+           application_id AS id,
+           candidate_name,
+           role,
+           department,
+           tier,
+           score,
+           milestone,
+           accepted_at,
+           similarity_score
+         FROM (
+           SELECT DISTINCT ON (rhs.application_id)
+             rhs.application_id,
+             rhs.snapshot_data->>'candidate_name' AS candidate_name,
+             rhs.snapshot_data->>'job_title' AS role,
+             rhs.snapshot_data->>'department' AS department,
+             rhs.snapshot_data->>'tier' AS tier,
+             (rhs.snapshot_data->>'score')::numeric AS score,
+             rhs.milestone,
+             rhs.captured_at AS accepted_at,
+             1 - (re.embedding <=> $1::vector) AS similarity_score
+           FROM role_history_snapshots rhs
+           JOIN applications a ON a.id = rhs.application_id
+           JOIN resume_embeddings re ON re.resume_id = a.resume_id
+           WHERE rhs.job_id != $2
+           ORDER BY rhs.application_id, rhs.captured_at DESC
+         ) latest
+         ORDER BY similarity_score DESC
+         LIMIT $3`,
+        [jobEmbedding, job_id, limitNum]
       );
 
       return similarRes.rows;

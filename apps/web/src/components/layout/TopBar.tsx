@@ -67,21 +67,6 @@ export function TopBar({ title }: TopBarProps) {
                 {queueStatus.processing} processing
               </span>
             )}
-            {queueStatus.failed > 0 && (
-              <span
-                style={{
-                  background: 'rgba(244,63,94,0.12)',
-                  border: '1px solid rgba(244,63,94,0.3)',
-                  color: '#F43F5E',
-                  borderRadius: '20px',
-                  padding: '3px 10px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
-              >
-                {queueStatus.failed} failed
-              </span>
-            )}
           </div>
         )}
 

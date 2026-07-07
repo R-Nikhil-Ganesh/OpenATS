@@ -10,11 +10,13 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TierTabs } from '@/components/candidates/TierTabs';
 import { Spinner } from '@/components/ui/Spinner';
+import { EditJobModal } from '@/components/jobs/EditJobModal';
 import { formatDate } from '@/lib/utils';
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const [editOpen, setEditOpen] = React.useState(false);
 
   const { data: job, isLoading } = useQuery({
     queryKey: ['job', id],
@@ -121,12 +123,14 @@ export default function JobDetailPage() {
               View Board
             </Button>
           </Link>
-          <Button variant="ghost" size="md">
+          <Button variant="ghost" size="md" onClick={() => setEditOpen(true)}>
             <Pencil size={14} />
             Edit
           </Button>
         </div>
       </div>
+
+      <EditJobModal job={job} open={editOpen} onClose={() => setEditOpen(false)} />
 
       {/* Processing stats bar */}
       {total > 0 && (

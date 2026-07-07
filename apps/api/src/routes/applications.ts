@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import path from 'path';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { withTransaction } from '../db/pool';
@@ -52,6 +53,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
            r.original_filename AS file_name, r.storage_path, r.extracted_markdown,
            r.file_size_bytes, r.mime_type,
            ae.id AS eval_id, ae.score, ae.tier,
+           ae.matched_skills, ae.missing_requirements,
            ae.reasons->'strengths' AS strengths, ae.reasons->'weaknesses' AS weaknesses, ae.recommendation,
            ae.raw_response, ae.model_name, ae.scored_at AS evaluated_at,
            rpj.status AS processing_status,
@@ -83,7 +85,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
          FROM application_state_history sh
          LEFT JOIN users u ON u.id = sh.changed_by
          WHERE sh.application_id = $1
-         ORDER BY sh.created_at ASC`,
+         ORDER BY sh.changed_at ASC`,
         [req.params.id]
       );
 
@@ -291,17 +293,17 @@ router.get('/:id/history', async (req: Request, res: Response, next: NextFunctio
   try {
     const result = await withTransaction(async (client) => {
       return client.query(
-        `SELECT sh.id, sh.from_status, sh.to_status, sh.note, sh.created_at,
-                u.full_name AS changed_by_name, u.email AS changed_by_email
+        `SELECT sh.id, sh.from_status, sh.to_status, sh.note, sh.changed_at,
+                u.full_name AS changed_by
          FROM application_state_history sh
          LEFT JOIN users u ON u.id = sh.changed_by
          WHERE sh.application_id = $1
-         ORDER BY sh.created_at ASC`,
+         ORDER BY sh.changed_at ASC`,
         [req.params.id]
       );
     });
 
-    res.json({ data: result.rows });
+    res.json({ history: result.rows });
   } catch (err) {
     next(err);
   }
@@ -327,7 +329,9 @@ router.get('/:id/resume', async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    res.sendFile(result.storage_path);
+    res.sendFile(path.resolve(result.storage_path), (err) => {
+      if (err) next(err);
+    });
   } catch (err) {
     next(err);
   }
