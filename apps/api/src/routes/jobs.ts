@@ -337,13 +337,13 @@ router.get('/:id/applications', async (req: Request, res: Response, next: NextFu
            a.id, a.status, a.applied_at, a.updated_at,
            c.id AS candidate_id, c.full_name, c.email, c.phone, c.location,
            r.id AS resume_id, r.original_filename AS file_name,
-           ae.tier, ae.score, ae.recommendation,
+           ae.tier, ae.score, ae.recommendation, ae.matched_skills,
            rpj.status AS processing_status
          FROM applications a
          JOIN candidates c ON c.id = a.candidate_id
          JOIN resumes r ON r.id = a.resume_id
          LEFT JOIN LATERAL (
-           SELECT tier, score, recommendation FROM application_ai_evaluations
+           SELECT tier, score, recommendation, matched_skills FROM application_ai_evaluations
            WHERE application_id = a.id
            ORDER BY created_at DESC LIMIT 1
          ) ae ON true

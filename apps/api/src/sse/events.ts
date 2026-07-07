@@ -1,6 +1,8 @@
 import { Response } from 'express';
-import { QueueEvents } from 'bullmq';
+import { QueueEvents, Job } from 'bullmq';
 import { config } from '../config';
+import { query } from '../db/pool';
+import { resumeQueue } from '../db/redis';
 
 // ─── SSE Client Registry ──────────────────────────────────────────────────────
 
@@ -10,32 +12,20 @@ import { config } from '../config';
  */
 export const sseClients: Set<Response> = new Set();
 
-// ─── Send SSE event to all clients ────────────────────────────────────────────
-
-export function sendSSEEvent(
-  event: { type: string; data: unknown }
-): void {
-  if (sseClients.size === 0) return;
-
-  const payload = `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`;
-
-  for (const client of sseClients) {
-    try {
-      client.write(payload);
-    } catch {
-      // Client disconnected mid-write; cleanup handled by 'close' listener
-      sseClients.delete(client);
-    }
-  }
-}
-
 // ─── SSE HTTP Handler ─────────────────────────────────────────────────────────
 
 import { Request, NextFunction } from 'express';
 import { authenticate } from '../middleware/auth';
 
 export function sseHandler(req: Request, res: Response, _next: NextFunction): void {
-  // Run auth inline
+  // Native EventSource can't set custom headers, so the client passes the
+  // access token as a query param instead. Bridge it into the normal
+  // Authorization header before delegating to the shared auth middleware —
+  // every other route keeps requiring a real Bearer header.
+  if (!req.headers.authorization && typeof req.query.token === 'string') {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+
   authenticate(req, res, () => {
     // Set SSE response headers
     res.setHeader('Content-Type', 'text/event-stream');
@@ -47,8 +37,8 @@ export function sseHandler(req: Request, res: Response, _next: NextFunction): vo
     // Register client
     sseClients.add(res);
 
-    // Send initial connected event
-    res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`);
+    // Send initial connected event (unnamed so it doesn't confuse onmessage parsers)
+    res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
 
     // Heartbeat every 30 seconds to prevent proxy timeouts
     const heartbeat = setInterval(() => {
@@ -77,40 +67,81 @@ const queueEvents = new QueueEvents(config.queue.name, {
   },
 });
 
-queueEvents.on('active', ({ jobId }) => {
-  // jobId is applicationId for our jobs
-  broadcastJobEvent(jobId, 'job:active', { applicationId: jobId, status: 'extracting' });
-});
-
-queueEvents.on('completed', ({ jobId, returnvalue }) => {
-  let result: unknown = returnvalue;
+// The BullMQ job id equals the applicationId for a first-time upload (see
+// upload.ts), but reprocess jobs use a distinct `reprocess-<id>-<ts>` id
+// (applications.ts) to avoid colliding with the original job in BullMQ's
+// registry. Resolve the real applicationId from the job's own data so both
+// paths broadcast under a consistent id.
+async function resolveApplicationId(bullJobId: string): Promise<string> {
   try {
-    result = JSON.parse(returnvalue);
-  } catch { /* keep as string */ }
+    const job = await Job.fromId(resumeQueue, bullJobId);
+    const dataAppId = job?.data?.applicationId;
+    if (typeof dataAppId === 'string') return dataAppId;
+  } catch (err) {
+    console.error('[SSE] Failed to resolve job data for', bullJobId, err);
+  }
+  return bullJobId;
+}
 
-  broadcastJobEvent(jobId, 'job:completed', { applicationId: jobId, status: 'completed', result });
-});
+async function broadcastForApplication(
+  bullJobId: string,
+  fields: Record<string, unknown>
+): Promise<void> {
+  if (sseClients.size === 0) return;
 
-queueEvents.on('failed', ({ jobId, failedReason }) => {
-  broadcastJobEvent(jobId, 'job:failed', { applicationId: jobId, status: 'failed', error: failedReason });
+  const applicationId = await resolveApplicationId(bullJobId);
+
+  let jobId: string | null = null;
+  try {
+    const result = await query<{ job_id: string }>(
+      'SELECT job_id FROM applications WHERE id = $1',
+      [applicationId]
+    );
+    jobId = result.rows[0]?.job_id ?? null;
+  } catch (err) {
+    console.error('[SSE] Failed to resolve job_id for application', applicationId, err);
+  }
+
+  const payload = JSON.stringify({ applicationId, jobId, ...fields });
+  const frame = `data: ${payload}\n\n`;
+
+  for (const client of sseClients) {
+    try {
+      client.write(frame);
+    } catch {
+      // Client disconnected mid-write; cleanup handled by 'close' listener
+      sseClients.delete(client);
+    }
+  }
+}
+
+queueEvents.on('active', ({ jobId }) => {
+  void broadcastForApplication(jobId, { type: 'progress', progress: 0 });
 });
 
 queueEvents.on('progress', ({ jobId, data }) => {
-  broadcastJobEvent(jobId, 'job:progress', { applicationId: jobId, progress: data });
+  const progress = typeof data === 'number' ? data : undefined;
+  void broadcastForApplication(jobId, { type: 'progress', progress });
+});
+
+queueEvents.on('completed', ({ jobId, returnvalue }) => {
+  let result: { tier?: string; score?: number } = {};
+  try {
+    result = typeof returnvalue === 'string' ? JSON.parse(returnvalue) : returnvalue;
+  } catch {
+    /* keep result empty if unparsable */
+  }
+  void broadcastForApplication(jobId, {
+    type: 'completed',
+    tier: result.tier,
+    score: result.score,
+  });
+});
+
+queueEvents.on('failed', ({ jobId, failedReason }) => {
+  void broadcastForApplication(jobId, { type: 'failed', error: failedReason });
 });
 
 queueEvents.on('error', (err) => {
   console.error('[SSE/QueueEvents] Error:', err.message);
 });
-
-/**
- * Broadcasts job events to all connected clients.
- */
-function broadcastJobEvent(_jobId: string, type: string, data: unknown): void {
-  const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const client of sseClients) {
-    try {
-      client.write(payload);
-    } catch { /* ignore disconnected clients */ }
-  }
-}
