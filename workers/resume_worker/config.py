@@ -23,6 +23,14 @@ class Config:
     vllm_model: str = os.getenv('VLLM_MODEL', 'Qwen/Qwen3-8B')
     vllm_max_tokens: int = int(os.getenv('VLLM_MAX_TOKENS', '2048'))
     vllm_temperature: float = float(os.getenv('VLLM_TEMPERATURE', '0.1'))
+    # Local inference (Ollama, single-GPU vLLM, etc.) can take well over a minute
+    # per resume, especially for "thinking" models — a short client timeout makes
+    # every scoring call fail outright rather than just running slow.
+    vllm_timeout_seconds: float = float(os.getenv('VLLM_TIMEOUT_SECONDS', '300'))
+    # Most local single-instance LLM servers process one request at a time; firing
+    # several scoring calls at once just makes them queue up behind each other
+    # until they blow past the timeout above. Cap how many run concurrently.
+    vllm_max_concurrent_requests: int = int(os.getenv('VLLM_MAX_CONCURRENT_REQUESTS', '1'))
 
     # Embeddings
     embedding_model: str = os.getenv('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')

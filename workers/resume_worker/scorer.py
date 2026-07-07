@@ -18,6 +18,18 @@ logger = logging.getLogger(__name__)
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "scoring_prompt.txt"
 SCORING_SYSTEM_PROMPT: str = _PROMPT_PATH.read_text(encoding="utf-8")
 
+# Local single-instance LLM servers (Ollama, single-GPU vLLM) generally can't
+# handle several scoring calls in parallel without each one queueing behind the
+# others until it exceeds the client timeout. Serialize calls to the backend
+# regardless of how many resumes the worker is processing concurrently.
+_llm_semaphore = asyncio.Semaphore(config.vllm_max_concurrent_requests)
+
+
+def _describe_error(exc: Exception) -> str:
+    """httpx timeout/connection errors often stringify to '' — always include the type."""
+    text = str(exc)
+    return f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+
 
 # ---------------------------------------------------------------------------
 # Pydantic response models
@@ -96,24 +108,30 @@ async def score_resume(
 
     last_error: Optional[Exception] = None
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=config.vllm_timeout_seconds) as client:
         for attempt in range(max_retries):
             try:
-                response = await client.post(
-                    f"{config.vllm_base_url}/v1/chat/completions",
-                    json={
-                        "model": model,
-                        "messages": [
-                            {"role": "system", "content": SCORING_SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "max_tokens": config.vllm_max_tokens,
-                        "temperature": config.vllm_temperature,
-                        # Ask vLLM to enforce JSON output (supported by vLLM ≥ 0.4)
-                        "response_format": {"type": "json_object"},
-                    },
-                    headers={"Content-Type": "application/json"},
-                )
+                async with _llm_semaphore:
+                    response = await client.post(
+                        f"{config.vllm_base_url}/v1/chat/completions",
+                        json={
+                            "model": model,
+                            "messages": [
+                                {"role": "system", "content": SCORING_SYSTEM_PROMPT},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            "max_tokens": config.vllm_max_tokens,
+                            "temperature": config.vllm_temperature,
+                            # Ask vLLM to enforce JSON output (supported by vLLM ≥ 0.4)
+                            "response_format": {"type": "json_object"},
+                            # Ollama-specific: skip chain-of-thought for hybrid
+                            # reasoning models (e.g. Qwen3) so the token budget
+                            # goes to the JSON answer instead of "thinking".
+                            # Ignored by servers that don't recognize it.
+                            "think": False,
+                        },
+                        headers={"Content-Type": "application/json"},
+                    )
                 response.raise_for_status()
 
                 data = response.json()
@@ -146,10 +164,11 @@ async def score_resume(
             except httpx.HTTPStatusError as exc:
                 last_error = exc
                 logger.error(
-                    "vLLM returned HTTP %d on attempt %d/%d",
+                    "vLLM returned HTTP %d on attempt %d/%d: %s",
                     exc.response.status_code,
                     attempt + 1,
                     max_retries,
+                    exc.response.text[:500],
                 )
                 await asyncio.sleep(5)
 
@@ -159,10 +178,11 @@ async def score_resume(
                     "vLLM connection error on attempt %d/%d: %s",
                     attempt + 1,
                     max_retries,
-                    exc,
+                    _describe_error(exc),
                 )
                 await asyncio.sleep(5)
 
     raise RuntimeError(
-        f"Scoring failed after {max_retries} attempts. Last error: {last_error}"
+        f"Scoring failed after {max_retries} attempts. "
+        f"Last error: {_describe_error(last_error) if last_error else 'unknown'}"
     )
