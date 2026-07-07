@@ -40,8 +40,8 @@ var/
 sdist/
 develop-eggs/
 .installed.cfg
-lib/
-lib64/
+workers/**/lib/
+workers/**/lib64/
 .eggs/
 *.egg-link
 
