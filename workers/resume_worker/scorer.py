@@ -38,13 +38,11 @@ def _describe_error(exc: Exception) -> str:
 class MatchedSkill(BaseModel):
     skill: str
     confidence: float = Field(ge=0.0, le=1.0)
-    evidence: str = ""
 
 
 class Reasons(BaseModel):
     strengths: list[str] = []
     weaknesses: list[str] = []
-    cultural_fit_notes: str = ""
 
 
 class ScoringResult(BaseModel):
@@ -80,7 +78,7 @@ async def score_resume(
     max_retries: int = 3,
 ) -> Tuple[ScoringResult, str]:
     """
-    Call the vLLM OpenAI-compatible endpoint with Qwen3-8B to score a resume
+    Call the configured OpenAI-compatible LLM endpoint to score a resume
     against a job description.
 
     Returns
@@ -122,13 +120,9 @@ async def score_resume(
                             ],
                             "max_tokens": config.vllm_max_tokens,
                             "temperature": config.vllm_temperature,
-                            # Ask vLLM to enforce JSON output (supported by vLLM ≥ 0.4)
+                            # Ask the server to enforce JSON output (supported by
+                            # vLLM >= 0.4 and Ollama's OpenAI-compatible endpoint)
                             "response_format": {"type": "json_object"},
-                            # Ollama-specific: skip chain-of-thought for hybrid
-                            # reasoning models (e.g. Qwen3) so the token budget
-                            # goes to the JSON answer instead of "thinking".
-                            # Ignored by servers that don't recognize it.
-                            "think": False,
                         },
                         headers={"Content-Type": "application/json"},
                     )

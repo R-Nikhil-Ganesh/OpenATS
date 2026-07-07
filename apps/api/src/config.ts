@@ -29,7 +29,7 @@ export const config = {
   },
   vllm: {
     baseUrl: process.env.VLLM_BASE_URL || 'http://localhost:8000',
-    model: process.env.VLLM_MODEL || 'Qwen/Qwen3-8B',
+    model: process.env.VLLM_MODEL || 'llama3.2:3b',
   },
   frontend: {
     url: process.env.FRONTEND_URL || 'http://localhost:3000',

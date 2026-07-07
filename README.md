@@ -11,14 +11,14 @@ OpenATS is designed as a single-tenant, locally hosted on-premises application. 
 - **Database**: PostgreSQL 16 with `pgvector` for embedding storage and similarity search.
 - **Queue & Caching**: Redis + BullMQ for handling asynchronous background processing jobs.
 - **AI Worker (`workers/resume_worker`)**: Python-based worker consuming BullMQ jobs for PDF extraction, embedding generation, and AI scoring.
-- **LLM Engine**: vLLM running a quantized local model (`Qwen3-8B`) for fast, private, on-device AI inference.
+- **LLM Engine**: [Ollama](https://ollama.com) running locally on the host (`llama3.2:3b` by default) for fast, private, on-device AI inference, accessed via its OpenAI-compatible endpoint. Any OpenAI-compatible server (vLLM, LM Studio, a hosted API) works by changing `VLLM_BASE_URL`/`VLLM_MODEL` in `.env`.
 
 ## 🚀 Prerequisites
 
 Before you begin, ensure you have the following installed on your host machine:
 - **Docker** and **Docker Compose**
 - **Node.js** (v20+) and **npm**
-- A CUDA-capable GPU (Recommended for running the vLLM container)
+- **[Ollama](https://ollama.com)** running on the host machine (a GPU speeds this up but isn't required for a 3B-class model)
 
 ## 🛠️ Setup & Installation
 
@@ -28,18 +28,17 @@ cp .env.example .env
 ```
 Open `.env` and fill in any necessary configurations (the defaults work out of the box for local development).
 
-**2. Start the Docker Stack**
+**2. Pull the LLM model (Required for AI Processing)**
+```bash
+ollama pull llama3.2:3b
+```
+The worker connects to Ollama on the host via `VLLM_BASE_URL=http://host.docker.internal:11434` (already set in `.env.example`). To use a bigger/more capable model, pull it and update `VLLM_MODEL` — note that larger models are much slower on local hardware and may need `VLLM_MAX_CONCURRENT_REQUESTS=1` and a higher `VLLM_TIMEOUT_SECONDS` to avoid scoring timeouts under concurrent load.
+
+**3. Start the Docker Stack**
 The entire infrastructure (PostgreSQL, Redis, Node API, Next.js Web, Python Worker) is containerized.
 ```bash
 docker compose up -d --build
 ```
-
-**3. Download the LLM Model (Required for AI Processing)**
-Because the vLLM container requires the model to be downloaded to its huggingface cache, you must trigger the download manually on the first run:
-```bash
-docker exec openats-vllm huggingface-cli download Qwen/Qwen3-8B
-```
-*(Note: If you do not have a dedicated GPU, you may need to adjust the vLLM container settings in `docker-compose.yml` or rely on an external inference API by changing `VLLM_BASE_URL` in `.env`).*
 
 ## 📁 Project Structure
 

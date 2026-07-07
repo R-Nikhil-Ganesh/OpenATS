@@ -4,9 +4,9 @@ version: '3.9'
 # OPENATS — AI Recruiting Platform
 # Docker Compose Stack
 #
-# NOTE: The vLLM service requires a CUDA-capable GPU.
-#       Pull the model manually before starting:
-#         docker exec openats-vllm huggingface-cli download Qwen/Qwen3-8B
+# NOTE: The LLM runs on the host via Ollama, not in this compose stack.
+#       Pull the model on the host before starting the worker:
+#         ollama pull llama3.2:3b
 # ==============================================================
 
 services:
@@ -105,10 +105,6 @@ services:
     environment:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
-      VLLM_BASE_URL: http://host.docker.internal:11434
-      VLLM_QUANTIZATION: awq
-      VLLM_GPU_MEMORY_UTILIZATION: 0.8
-      WORKER_CONCURRENCY: 2
       DATABASE_URL: postgresql://${POSTGRES_USER:-openats}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-openats}
     volumes:
       - ./uploads:/app/uploads
