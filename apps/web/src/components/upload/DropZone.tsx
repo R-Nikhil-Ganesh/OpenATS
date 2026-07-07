@@ -3,7 +3,9 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileText, X, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
+import { Upload, FileText, X, CheckCircle, AlertCircle, Loader, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useSSE } from '@/hooks/useSSE';
 import apiClient from '@/lib/api';
@@ -29,7 +31,9 @@ function formatBytes(bytes: number): string {
 export function DropZone({ jobId }: DropZoneProps) {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadedCount, setUploadedCount] = useState(0);
   const { statusMap } = useSSE();
+  const queryClient = useQueryClient();
 
   const onDrop = useCallback((accepted: File[]) => {
     const newItems = accepted.map((f) => ({
@@ -65,12 +69,18 @@ export function DropZone({ jobId }: DropZoneProps) {
       fd.append('resumes', item.file);
 
       try {
-        await apiClient.post(`/jobs/${jobId}/resumes`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        setFiles((prev) =>
-          prev.map((f) => (f.id === item.id ? { ...f, uploadStatus: 'uploaded' } : f))
+        const res = await apiClient.post<{ results: { applicationId: string; status: string }[] }>(
+          `/jobs/${jobId}/resumes`,
+          fd,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
         );
+        const applicationId = res.data.results[0]?.applicationId || undefined;
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === item.id ? { ...f, uploadStatus: 'uploaded', applicationId } : f
+          )
+        );
+        setUploadedCount((c) => c + 1);
       } catch (err: unknown) {
         const errorMsg =
           err instanceof Error ? err.message : 'Upload failed';
@@ -83,6 +93,10 @@ export function DropZone({ jobId }: DropZoneProps) {
     }
 
     setUploading(false);
+    queryClient.invalidateQueries({ queryKey: ['job-stats', jobId] });
+    queryClient.invalidateQueries({ queryKey: ['job-applications-all', jobId] });
+    queryClient.invalidateQueries({ queryKey: ['job-applications', jobId] });
+    queryClient.invalidateQueries({ queryKey: ['job-applications-counts', jobId] });
   };
 
   const processingStatus = (item: FileItem): string => {
@@ -96,16 +110,16 @@ export function DropZone({ jobId }: DropZoneProps) {
   };
 
   const statusPill = (status: string) => {
-    const configs: Record<string, { label: string; color: string; bg: string }> = {
-      pending: { label: 'Queued', color: '#64748B', bg: 'rgba(100,116,139,0.12)' },
-      uploading: { label: 'Uploading', color: '#6366F1', bg: 'rgba(99,102,241,0.12)' },
-      uploaded: { label: 'Uploaded', color: '#6366F1', bg: 'rgba(99,102,241,0.12)' },
-      queued: { label: 'Queued', color: '#64748B', bg: 'rgba(100,116,139,0.12)' },
-      extracting: { label: 'Extracting', color: '#818CF8', bg: 'rgba(129,140,248,0.12)' },
-      scoring: { label: 'Scoring', color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
-      completed: { label: 'Done', color: '#10B981', bg: 'rgba(16,185,129,0.12)' },
-      failed: { label: 'Failed', color: '#F43F5E', bg: 'rgba(244,63,94,0.12)' },
-      error: { label: 'Error', color: '#F43F5E', bg: 'rgba(244,63,94,0.12)' },
+    const configs: Record<string, { label: string; color: string; rgb: string; bg: string }> = {
+      pending: { label: 'Queued', color: 'var(--color-muted)', rgb: 'var(--color-muted-rgb)', bg: 'rgba(var(--color-muted-rgb),0.12)' },
+      uploading: { label: 'Uploading', color: 'var(--color-primary)', rgb: 'var(--color-primary-rgb)', bg: 'rgba(var(--color-primary-rgb),0.12)' },
+      uploaded: { label: 'Uploaded', color: 'var(--color-primary)', rgb: 'var(--color-primary-rgb)', bg: 'rgba(var(--color-primary-rgb),0.12)' },
+      queued: { label: 'Queued', color: 'var(--color-muted)', rgb: 'var(--color-muted-rgb)', bg: 'rgba(var(--color-muted-rgb),0.12)' },
+      extracting: { label: 'Extracting', color: 'var(--color-primary-light)', rgb: 'var(--color-primary-light-rgb)', bg: 'rgba(var(--color-primary-light-rgb),0.12)' },
+      scoring: { label: 'Scoring', color: 'var(--color-warning)', rgb: 'var(--color-warning-rgb)', bg: 'rgba(var(--color-warning-rgb),0.12)' },
+      completed: { label: 'Done', color: 'var(--color-success)', rgb: 'var(--color-success-rgb)', bg: 'rgba(var(--color-success-rgb),0.12)' },
+      failed: { label: 'Failed', color: 'var(--color-danger)', rgb: 'var(--color-danger-rgb)', bg: 'rgba(var(--color-danger-rgb),0.12)' },
+      error: { label: 'Error', color: 'var(--color-danger)', rgb: 'var(--color-danger-rgb)', bg: 'rgba(var(--color-danger-rgb),0.12)' },
     };
 
     const cfg = configs[status] ?? configs.pending;
@@ -119,7 +133,7 @@ export function DropZone({ jobId }: DropZoneProps) {
           borderRadius: '20px',
           color: cfg.color,
           background: cfg.bg,
-          border: `1px solid ${cfg.color}33`,
+          border: `1px solid rgba(${cfg.rgb},0.2)`,
         }}
       >
         {cfg.label}
@@ -134,27 +148,27 @@ export function DropZone({ jobId }: DropZoneProps) {
         {...getRootProps()}
         style={{
           border: isDragActive
-            ? '2px dashed #6366F1'
-            : '2px dashed rgba(255,255,255,0.1)',
+            ? '2px dashed var(--color-primary)'
+            : '2px dashed rgba(var(--ink-rgb),0.1)',
           borderRadius: '14px',
           padding: '48px 32px',
           textAlign: 'center',
           cursor: 'pointer',
-          background: isDragActive ? 'rgba(99,102,241,0.05)' : 'rgba(255,255,255,0.02)',
+          background: isDragActive ? 'rgba(var(--color-primary-rgb),0.05)' : 'rgba(var(--ink-rgb),0.02)',
           transition: 'all 0.2s ease',
-          boxShadow: isDragActive ? '0 0 0 4px rgba(99,102,241,0.15)' : 'none',
+          boxShadow: isDragActive ? '0 0 0 4px rgba(var(--color-primary-rgb),0.15)' : 'none',
         }}
       >
         <input {...getInputProps()} />
         <Upload
           size={36}
-          color={isDragActive ? '#6366F1' : '#334155'}
+          color={isDragActive ? 'var(--color-primary)' : 'var(--color-text-disabled)'}
           style={{ marginBottom: '12px' }}
         />
-        <p style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 600, color: '#E2E8F0' }}>
+        <p style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 600, color: 'var(--color-text-strong)' }}>
           {isDragActive ? 'Drop PDF resumes here' : 'Drop PDF resumes here or click to browse'}
         </p>
-        <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted)' }}>
           PDF only · Max 20 files per batch
         </p>
       </div>
@@ -167,8 +181,8 @@ export function DropZone({ jobId }: DropZoneProps) {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             style={{
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              background: 'rgba(var(--ink-rgb),0.02)',
+              border: '1px solid rgba(var(--ink-rgb),0.06)',
               borderRadius: '12px',
               overflow: 'hidden',
             }}
@@ -188,17 +202,17 @@ export function DropZone({ jobId }: DropZoneProps) {
                     gap: '12px',
                     padding: '12px 16px',
                     borderBottom:
-                      i < files.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                      i < files.length - 1 ? '1px solid rgba(var(--ink-rgb),0.05)' : 'none',
                   }}
                 >
-                  <FileText size={16} color="#6366F1" style={{ flexShrink: 0 }} />
+                  <FileText size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <p
                       style={{
                         margin: 0,
                         fontSize: '13px',
                         fontWeight: 500,
-                        color: '#E2E8F0',
+                        color: 'var(--color-text-strong)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -206,7 +220,7 @@ export function DropZone({ jobId }: DropZoneProps) {
                     >
                       {item.file.name}
                     </p>
-                    <p style={{ margin: 0, fontSize: '11px', color: '#64748B' }}>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-muted)' }}>
                       {formatBytes(item.file.size)}
                     </p>
                   </div>
@@ -214,12 +228,12 @@ export function DropZone({ jobId }: DropZoneProps) {
                   {statusPill(status)}
 
                   {status === 'uploading' && (
-                    <Loader size={14} color="#6366F1" style={{ animation: 'spin 1s linear infinite' }} />
+                    <Loader size={14} color="var(--color-primary)" style={{ animation: 'spin 1s linear infinite' }} />
                   )}
-                  {status === 'completed' && <CheckCircle size={14} color="#10B981" />}
+                  {status === 'completed' && <CheckCircle size={14} color="var(--color-success)" />}
                   {(status === 'error' || status === 'failed') && (
                     <span title={item.errorMsg} style={{ display: 'flex' }}>
-                      <AlertCircle size={14} color="#F43F5E" />
+                      <AlertCircle size={14} color="var(--color-danger)" />
                     </span>
                   )}
 
@@ -229,7 +243,7 @@ export function DropZone({ jobId }: DropZoneProps) {
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: '#64748B',
+                        color: 'var(--color-muted)',
                         cursor: 'pointer',
                         padding: 2,
                         display: 'flex',
@@ -258,6 +272,36 @@ export function DropZone({ jobId }: DropZoneProps) {
             Upload {files.filter((f) => f.uploadStatus === 'pending').length} Resume(s)
           </Button>
         </div>
+      )}
+
+      {!uploading && uploadedCount > 0 && files.every((f) => f.uploadStatus !== 'pending' && f.uploadStatus !== 'uploading') && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            padding: '14px 16px',
+            borderRadius: '12px',
+            background: 'rgba(var(--color-success-rgb),0.06)',
+            border: '1px solid rgba(var(--color-success-rgb),0.2)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <CheckCircle size={16} color="var(--color-success)" />
+            <span style={{ fontSize: '13px', color: 'var(--color-text-strong)' }}>
+              {uploadedCount} resume{uploadedCount === 1 ? '' : 's'} uploaded — processing status updates live below.
+            </span>
+          </div>
+          <Link href={`/jobs/${jobId}/board`} style={{ textDecoration: 'none' }}>
+            <Button variant="outline" size="sm">
+              <LayoutGrid size={13} />
+              View Board
+            </Button>
+          </Link>
+        </motion.div>
       )}
     </div>
   );

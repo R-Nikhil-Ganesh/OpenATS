@@ -9,6 +9,16 @@ export type SSEEvent = {
   error?: string;
 };
 
+export type AppStatus = {
+  status: 'queued' | 'extracting' | 'extracted' | 'scoring' | 'completed' | 'failed';
+  progress?: number;
+  tier?: string;
+  score?: number;
+  error?: string;
+};
+
+export type StatusMap = Record<string, AppStatus>;
+
 export function createSSEConnection(
   url: string,
   token: string,
