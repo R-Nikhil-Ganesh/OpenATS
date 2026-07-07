@@ -5,6 +5,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { Search } from 'lucide-react';
 import { jobsApi, applicationsApi, type Application } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
@@ -15,15 +16,17 @@ type Column = {
   id: string;
   label: string;
   color: string;
+  /** Bare `--color-x-rgb` reference for custom-alpha rgba() at the call site. */
+  rgb: string;
   bg: string;
 };
 
 const COLUMNS: Column[] = [
-  { id: 'reviewable', label: 'Reviewable', color: '#64748B', bg: 'rgba(100,116,139,0.08)' },
-  { id: 'screening', label: 'Screening', color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
-  { id: 'interviewing', label: 'Interviewing', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
-  { id: 'hired', label: 'Hired', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
-  { id: 'rejected', label: 'Rejected', color: '#F43F5E', bg: 'rgba(244,63,94,0.08)' },
+  { id: 'reviewable', label: 'Reviewable', color: 'var(--color-muted)', rgb: 'var(--color-muted-rgb)', bg: 'rgba(var(--color-muted-rgb),0.08)' },
+  { id: 'screening', label: 'Screening', color: 'var(--color-primary)', rgb: 'var(--color-primary-rgb)', bg: 'rgba(var(--color-primary-rgb),0.08)' },
+  { id: 'interviewing', label: 'Interviewing', color: 'var(--color-warning)', rgb: 'var(--color-warning-rgb)', bg: 'rgba(var(--color-warning-rgb),0.08)' },
+  { id: 'hired', label: 'Hired', color: 'var(--color-success)', rgb: 'var(--color-success-rgb)', bg: 'rgba(var(--color-success-rgb),0.08)' },
+  { id: 'rejected', label: 'Rejected', color: 'var(--color-danger)', rgb: 'var(--color-danger-rgb)', bg: 'rgba(var(--color-danger-rgb),0.08)' },
 ];
 
 type Props = {
@@ -49,6 +52,7 @@ function buildBoard(applications: Application[]): BoardState {
 export function KanbanBoard({ jobId }: Props) {
   const queryClient = useQueryClient();
   const [board, setBoard] = useState<BoardState | null>(null);
+  const [search, setSearch] = useState<Record<string, string>>({});
 
   const { data: apps, isLoading } = useQuery({
     queryKey: ['job-applications-all', jobId],
@@ -102,6 +106,17 @@ export function KanbanBoard({ jobId }: Props) {
     );
   }
 
+  const filteredCards = (colId: string): Application[] => {
+    const cards = board[colId] ?? [];
+    const q = search[colId]?.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter((app) => {
+      const name = app.candidate?.full_name?.toLowerCase() ?? '';
+      const email = app.candidate?.email?.toLowerCase() ?? '';
+      return name.includes(q) || email.includes(q);
+    });
+  };
+
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <div
@@ -114,20 +129,22 @@ export function KanbanBoard({ jobId }: Props) {
         }}
       >
         {COLUMNS.map((col) => {
-          const cards = board[col.id] ?? [];
+          const allCards = board[col.id] ?? [];
+          const cards = filteredCards(col.id);
           return (
             <div
               key={col.id}
               style={{
-                minWidth: 230,
-                width: 230,
+                minWidth: 260,
+                width: 260,
                 flexShrink: 0,
                 display: 'flex',
                 flexDirection: 'column',
                 background: col.bg,
                 borderRadius: '13px',
-                border: `1px solid ${col.color}25`,
+                border: `1px solid rgba(${col.rgb},0.15)`,
                 overflow: 'hidden',
+                maxHeight: '75vh',
               }}
             >
               {/* Column header with colored top border */}
@@ -136,6 +153,7 @@ export function KanbanBoard({ jobId }: Props) {
                   height: 3,
                   background: col.color,
                   borderRadius: '13px 13px 0 0',
+                  flexShrink: 0,
                 }}
               />
               <div
@@ -144,6 +162,7 @@ export function KanbanBoard({ jobId }: Props) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  flexShrink: 0,
                 }}
               >
                 <span style={{ fontWeight: 700, fontSize: '13px', color: col.color }}>
@@ -151,7 +170,7 @@ export function KanbanBoard({ jobId }: Props) {
                 </span>
                 <span
                   style={{
-                    background: `${col.color}20`,
+                    background: `rgba(${col.rgb},0.13)`,
                     color: col.color,
                     borderRadius: '12px',
                     padding: '2px 8px',
@@ -159,9 +178,37 @@ export function KanbanBoard({ jobId }: Props) {
                     fontWeight: 700,
                   }}
                 >
-                  {cards.length}
+                  {search[col.id]?.trim() ? `${cards.length}/${allCards.length}` : allCards.length}
                 </span>
               </div>
+
+              {allCards.length > 4 && (
+                <div style={{ padding: '0 10px 8px', flexShrink: 0 }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search
+                      size={12}
+                      color="var(--color-muted)"
+                      style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}
+                    />
+                    <input
+                      value={search[col.id] ?? ''}
+                      onChange={(e) => setSearch((prev) => ({ ...prev, [col.id]: e.target.value }))}
+                      placeholder="Search…"
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        padding: '6px 8px 6px 26px',
+                        fontSize: '12px',
+                        color: 'var(--color-text-strong)',
+                        background: 'rgba(var(--ink-rgb),0.04)',
+                        border: '1px solid rgba(var(--ink-rgb),0.08)',
+                        borderRadius: '7px',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <Droppable droppableId={col.id}>
                 {(provided, snapshot) => (
@@ -172,10 +219,16 @@ export function KanbanBoard({ jobId }: Props) {
                       flex: 1,
                       padding: '0 10px 10px',
                       minHeight: 100,
-                      background: snapshot.isDraggingOver ? `${col.color}08` : 'transparent',
+                      overflowY: 'auto',
+                      background: snapshot.isDraggingOver ? `rgba(${col.rgb},0.03)` : 'transparent',
                       transition: 'background 0.15s ease',
                     }}
                   >
+                    {cards.length === 0 && allCards.length > 0 && (
+                      <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', textAlign: 'center', padding: '16px 0' }}>
+                        No matches
+                      </p>
+                    )}
                     {cards.map((app, index) => (
                       <Draggable key={app.id} draggableId={app.id} index={index}>
                         {(drag, snapDrag) => (
@@ -191,16 +244,16 @@ export function KanbanBoard({ jobId }: Props) {
                             <motion.div
                               initial={{ opacity: 0, y: 6 }}
                               animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: index * 0.04 }}
+                              transition={{ delay: Math.min(index, 8) * 0.03 }}
                               style={{
-                                background: 'rgba(255,255,255,0.04)',
+                                background: 'rgba(var(--ink-rgb),0.04)',
                                 border: snapDrag.isDragging
-                                  ? `1px solid ${col.color}60`
-                                  : '1px solid rgba(255,255,255,0.07)',
+                                  ? `1px solid rgba(${col.rgb},0.38)`
+                                  : '1px solid rgba(var(--ink-rgb),0.07)',
                                 borderRadius: '10px',
                                 padding: '12px',
                                 boxShadow: snapDrag.isDragging
-                                  ? `0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px ${col.color}30`
+                                  ? `0 8px 24px rgba(var(--shadow-rgb),0.112), 0 0 0 1px rgba(${col.rgb},0.19)`
                                   : 'none',
                                 cursor: 'grab',
                               }}
@@ -215,7 +268,7 @@ export function KanbanBoard({ jobId }: Props) {
                                     margin: '0 0 4px',
                                     fontSize: '13px',
                                     fontWeight: 700,
-                                    color: '#F1F5F9',
+                                    color: 'var(--color-text-primary)',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
@@ -229,12 +282,17 @@ export function KanbanBoard({ jobId }: Props) {
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
+                                  gap: '6px',
                                   marginTop: '6px',
+                                  minWidth: 0,
                                 }}
                               >
-                                <Badge tier={app.tier ?? undefined} size="sm" />
+                                <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                                  <Badge tier={app.tier ?? undefined} size="sm" />
+                                </div>
                                 <span
                                   style={{
+                                    flexShrink: 0,
                                     fontSize: '11px',
                                     fontWeight: 700,
                                     color: col.color,
@@ -247,7 +305,7 @@ export function KanbanBoard({ jobId }: Props) {
                                 style={{
                                   margin: '6px 0 0',
                                   fontSize: '11px',
-                                  color: '#475569',
+                                  color: 'var(--color-text-muted)',
                                 }}
                               >
                                 {differenceInDays(new Date(), new Date(app.created_at))} days in stage

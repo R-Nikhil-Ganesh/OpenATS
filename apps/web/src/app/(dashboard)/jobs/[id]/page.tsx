@@ -1,21 +1,21 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Upload, LayoutGrid, Pencil } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Upload, LayoutGrid, Pencil } from 'lucide-react';
 import { jobsApi } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { TierTabs } from '@/components/candidates/TierTabs';
+import { ApplicationsTable } from '@/components/applications/ApplicationsTable';
 import { Spinner } from '@/components/ui/Spinner';
 import { EditJobModal } from '@/components/jobs/EditJobModal';
+import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { formatDate } from '@/lib/utils';
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = React.useState(false);
 
   const { data: job, isLoading } = useQuery({
@@ -23,22 +23,14 @@ export default function JobDetailPage() {
     queryFn: () => jobsApi.get(id).then((r) => r.data),
   });
 
+  // SSEProvider (mounted in the dashboard layout) pushes invalidations for
+  // job-stats/job-applications as processing events arrive; this interval is
+  // just a fallback in case the SSE connection drops.
   const { data: stats } = useQuery({
     queryKey: ['job-stats', id],
     queryFn: () => jobsApi.getStats(id).then((r) => r.data),
     refetchInterval: (query) => (query.state.data?.processing ?? 0) > 0 ? 10_000 : false,
   });
-
-  // Poll while jobs are processing
-  useEffect(() => {
-    if ((stats?.processing ?? 0) > 0 || (stats?.queued ?? 0) > 0) {
-      const interval = setInterval(() => {
-        queryClient.invalidateQueries({ queryKey: ['job-applications', id] });
-        queryClient.invalidateQueries({ queryKey: ['job-stats', id] });
-      }, 10_000);
-      return () => clearInterval(interval);
-    }
-  }, [stats, id, queryClient]);
 
   if (isLoading || !job) {
     return (
@@ -58,18 +50,13 @@ export default function JobDetailPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px' }}>
-      {/* Breadcrumb */}
-      <nav style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-        <Link href="/jobs" style={{ color: '#64748B', textDecoration: 'none' }}>Jobs</Link>
-        <ChevronRight size={13} color="#475569" />
-        <span style={{ color: '#E2E8F0', fontWeight: 500 }}>{job.title}</span>
-      </nav>
+      <Breadcrumb items={[{ label: 'Jobs', href: '/jobs' }, { label: job.title }]} />
 
       {/* Job header */}
       <div
         style={{
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(var(--ink-rgb),0.03)',
+          border: '1px solid rgba(var(--ink-rgb),0.08)',
           borderRadius: '16px',
           padding: '24px',
           display: 'flex',
@@ -86,7 +73,7 @@ export default function JobDetailPage() {
                 margin: 0,
                 fontSize: '26px',
                 fontWeight: 800,
-                color: '#F1F5F9',
+                color: 'var(--color-text-primary)',
                 letterSpacing: '-0.5px',
               }}
             >
@@ -95,16 +82,16 @@ export default function JobDetailPage() {
             <Badge status={job.status} />
           </div>
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '13px', color: '#64748B' }}>🏢 {job.department}</span>
+            <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>🏢 {job.department}</span>
             {job.location && (
-              <span style={{ fontSize: '13px', color: '#64748B' }}>📍 {job.location}</span>
+              <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>📍 {job.location}</span>
             )}
-            <span style={{ fontSize: '13px', color: '#64748B' }}>
+            <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>
               🗓 Created {formatDate(job.created_at)}
             </span>
             {(job.experience_years_min !== undefined && job.experience_years_max !== undefined) && (
-              <p style={{ margin: 0, fontSize: '13px', color: '#94A3B8' }}>
-                <span style={{ color: '#E2E8F0' }}>Experience:</span> {job.experience_years_min}-{job.experience_years_max} yrs
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted)' }}>
+                <span style={{ color: 'var(--color-text-strong)' }}>Experience:</span> {job.experience_years_min}-{job.experience_years_max} yrs
               </p>
             )}
           </div>
@@ -136,8 +123,8 @@ export default function JobDetailPage() {
       {total > 0 && (
         <div
           style={{
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background: 'rgba(var(--ink-rgb),0.02)',
+            border: '1px solid rgba(var(--ink-rgb),0.07)',
             borderRadius: '12px',
             padding: '16px 20px',
           }}
@@ -151,15 +138,15 @@ export default function JobDetailPage() {
             }}
           >
             {[
-              { label: 'Total', value: total, color: '#94A3B8' },
-              { label: 'Queued', value: queued, color: '#64748B' },
-              { label: 'Processing', value: processing, color: '#F59E0B' },
-              { label: 'Done', value: done, color: '#10B981' },
-              { label: 'Failed', value: failed, color: '#F43F5E' },
+              { label: 'Total', value: total, color: 'var(--color-muted)' },
+              { label: 'Queued', value: queued, color: 'var(--color-muted)' },
+              { label: 'Processing', value: processing, color: 'var(--color-warning)' },
+              { label: 'Done', value: done, color: 'var(--color-success)' },
+              { label: 'Failed', value: failed, color: 'var(--color-danger)' },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 <span style={{ fontSize: '20px', fontWeight: 800, color }}>{value}</span>
-                <span style={{ fontSize: '11px', color: '#64748B' }}>{label}</span>
+                <span style={{ fontSize: '11px', color: 'var(--color-muted)' }}>{label}</span>
               </div>
             ))}
           </div>
@@ -168,7 +155,7 @@ export default function JobDetailPage() {
           <div
             style={{
               height: 6,
-              background: 'rgba(255,255,255,0.07)',
+              background: 'rgba(var(--ink-rgb),0.07)',
               borderRadius: 10,
               overflow: 'hidden',
             }}
@@ -177,24 +164,24 @@ export default function JobDetailPage() {
               style={{
                 height: '100%',
                 width: `${donePercent}%`,
-                background: 'linear-gradient(90deg, #6366F1, #10B981)',
+                background: 'linear-gradient(90deg, var(--color-primary), var(--color-success))',
                 borderRadius: 10,
                 transition: 'width 0.5s ease',
               }}
             />
           </div>
-          <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#64748B' }}>
+          <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--color-muted)' }}>
             {Math.round(donePercent)}% processed
           </p>
         </div>
       )}
 
-      {/* Tier tabs */}
+      {/* Candidates table */}
       <div>
-        <h2 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 700, color: '#F1F5F9' }}>
+        <h2 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
           Candidates
         </h2>
-        <TierTabs jobId={id} />
+        <ApplicationsTable jobId={id} />
       </div>
     </div>
   );
