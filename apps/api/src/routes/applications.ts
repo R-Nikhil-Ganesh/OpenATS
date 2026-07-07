@@ -37,9 +37,7 @@ const patchStatusSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 
-const reprocessSchema = z.object({
-  stage: z.enum(['extraction', 'scoring']).optional(),
-});
+const reprocessSchema = z.object({});
 
 // ─── GET /:id — Full application detail ──────────────────────────────────────
 
@@ -56,7 +54,8 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
            ae.id AS eval_id, ae.score, ae.tier,
            ae.reasons->'strengths' AS strengths, ae.reasons->'weaknesses' AS weaknesses, ae.recommendation,
            ae.raw_response, ae.model_name, ae.scored_at AS evaluated_at,
-           rpj.status AS processing_status, rpj.stage AS processing_stage,
+           rpj.status AS processing_status,
+
            rpj.error_message, rpj.attempts, rpj.bullmq_job_id,
            rpj.started_at AS processing_started_at,
            rpj.completed_at AS processing_completed_at
@@ -218,8 +217,6 @@ router.post(
   requireRole('owner'),
   validate(reprocessSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const { stage = 'extraction' } = req.body as z.infer<typeof reprocessSchema>;
-
     try {
       const result = await withTransaction(async (client) => {
         const appRes = await client.query<{
@@ -240,11 +237,11 @@ router.post(
         // Reset existing processing job
         await client.query(
           `UPDATE resume_processing_jobs
-           SET status = 'queued', stage = $1, error_message = NULL,
+           SET status = 'queued', error_message = NULL,
                bullmq_job_id = NULL, started_at = NULL, completed_at = NULL,
                attempts = 0, updated_at = NOW()
-           WHERE application_id = $2`,
-          [stage, app.id]
+           WHERE application_id = $1`,
+          [app.id]
         );
 
         // Reset application status
@@ -269,7 +266,6 @@ router.post(
           resumePath: result.resumePath,
           jobId: result.jobId,
           reprocess: true,
-          stage,
         },
         { jobId: `reprocess-${result.appId}-${Date.now()}` }
       );
@@ -282,7 +278,7 @@ router.post(
         );
       });
 
-      res.json({ applicationId: result.appId, bullmqJobId: bullJob.id, stage, status: 'queued' });
+      res.json({ applicationId: result.appId, bullmqJobId: bullJob.id, status: 'queued' });
     } catch (err) {
       next(err);
     }
@@ -306,6 +302,32 @@ router.get('/:id/history', async (req: Request, res: Response, next: NextFunctio
     });
 
     res.json({ data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /:id/resume — Download resume PDF ───────────────────────────────────
+
+router.get('/:id/resume', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await withTransaction(async (client) => {
+      const appRes = await client.query(
+        `SELECT r.storage_path
+         FROM applications a
+         JOIN resumes r ON r.id = a.resume_id
+         WHERE a.id = $1`,
+        [req.params.id]
+      );
+      return appRes.rows[0];
+    });
+
+    if (!result || !result.storage_path) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Resume not found' } });
+      return;
+    }
+
+    res.sendFile(result.storage_path);
   } catch (err) {
     next(err);
   }

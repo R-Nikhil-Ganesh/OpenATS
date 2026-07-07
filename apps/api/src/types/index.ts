@@ -64,11 +64,15 @@ export interface JobRequisition {
   department: string | null;
   location: string | null;
   employment_type: EmploymentType | null;
-  raw_jd: string;
   status: JobStatus;
+  raw_jd: string;
+  normalized_jd: string | null;
+  required_skills: Record<string, unknown>[];
+  nice_to_have_skills: Record<string, unknown>[];
   experience_years_min: number | null;
   experience_years_max: number | null;
   created_by: string;
+  closed_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -79,6 +83,7 @@ export interface Candidate {
   email: string;
   phone: string | null;
   linkedin_url: string | null;
+  github_url: string | null;
   location: string | null;
   created_at: Date;
   updated_at: Date;
@@ -87,24 +92,28 @@ export interface Candidate {
 export interface Resume {
   id: string;
   candidate_id: string;
+  original_filename: string;
   storage_path: string;
-  content_hash: string;
-  file_name: string;
-  file_size_bytes: number | null;
+  file_size_bytes: number;
   mime_type: string;
+  content_hash: string | null;
   extracted_markdown: string | null;
-  extraction_status: 'pending' | 'completed' | 'failed';
+  extraction_metadata: Record<string, unknown>;
+  extracted_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
 export interface Application {
   id: string;
-  job_id: string;
   candidate_id: string;
   resume_id: string;
+  job_id: string;
   status: ApplicationStatus;
   applied_at: Date;
+  reviewed_by: string | null;
+  reviewer_notes: string | null;
+  created_at: Date;
   updated_at: Date;
 }
 
@@ -113,14 +122,14 @@ export interface AiEvaluation {
   application_id: string;
   model_name: string;
   model_version: string | null;
-  score: number | null;
   tier: AiTier;
-  summary: string | null;
-  strengths: string[] | null;
-  weaknesses: string[] | null;
+  score: number | null;
+  matched_skills: Record<string, unknown>[];
+  missing_requirements: Record<string, unknown>[];
+  reasons: Record<string, unknown>;
   recommendation: string | null;
-  raw_response: Record<string, unknown> | null;
-  evaluated_at: Date;
+  raw_response: string | null;
+  scored_at: Date | null;
   created_at: Date;
 }
 
@@ -131,7 +140,7 @@ export interface StateHistory {
   to_status: ApplicationStatus;
   changed_by: string | null;
   note: string | null;
-  created_at: Date;
+  changed_at: Date | null;
 }
 
 export interface ProcessingJob {
@@ -139,8 +148,9 @@ export interface ProcessingJob {
   application_id: string;
   bullmq_job_id: string | null;
   status: ProcessingJobStatus;
-  stage: string | null;
+  progress: number;
   error_message: string | null;
+  error_stack: string | null;
   attempts: number;
   started_at: Date | null;
   completed_at: Date | null;
@@ -152,15 +162,10 @@ export interface RoleHistorySnapshot {
   id: string;
   job_id: string;
   application_id: string;
-  candidate_id: string;
+  evaluation_id: string | null;
   milestone: string;
-  job_title: string;
-  department: string | null;
-  candidate_name: string;
-  tier: AiTier;
-  score: number | null;
   snapshot_data: Record<string, unknown>;
-  created_at: Date;
+  captured_at: Date | null;
 }
 
 // ─── JWT ─────────────────────────────────────────────────────────────────────

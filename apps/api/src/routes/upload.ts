@@ -141,9 +141,9 @@ router.post(
           // Create resume record
           const resumeRes = await client.query<{ id: string }>(
             `INSERT INTO resumes
-               (id, candidate_id, storage_path, content_hash, file_name,
-                file_size_bytes, mime_type, extraction_status)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,'pending')
+               (id, candidate_id, storage_path, content_hash, original_filename,
+                file_size_bytes, mime_type)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)
              RETURNING id`,
             [
               uuidv4(),
@@ -170,8 +170,8 @@ router.post(
           // Create processing job record
           await client.query(
             `INSERT INTO resume_processing_jobs
-               (id, application_id, status, stage, attempts)
-             VALUES ($1,$2,'queued','extraction',0)`,
+               (id, application_id, status, attempts)
+             VALUES ($1,$2,'queued',0)`,
             [uuidv4(), appId]
           );
 

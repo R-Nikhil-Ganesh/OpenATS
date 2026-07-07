@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { applicationsApi, type StatusHistoryEntry } from '@/lib/api';
+import { getAccessToken } from '@/lib/auth';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -374,7 +375,9 @@ export function CandidateSplitScreen({ applicationId }: Props) {
 
   const scoreColor = tierColor(app.tier);
   const candidate = app.candidate;
-  const resumeUrl = candidate?.resume_url;
+  const resumeUrl = candidate?.resume_url 
+    ? `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'}/applications/${applicationId}/resume` 
+    : undefined;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'analysis', label: 'AI Analysis' },
@@ -448,7 +451,10 @@ export function CandidateSplitScreen({ applicationId }: Props) {
         >
           {resumeUrl ? (
             <Document
-              file={resumeUrl}
+              file={{
+                url: resumeUrl,
+                httpHeaders: { Authorization: `Bearer ${getAccessToken()}` }
+              } as any}
               onLoadSuccess={({ numPages: n }) => setNumPages(n)}
               loading={
                 <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>

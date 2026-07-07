@@ -9,7 +9,7 @@
 INSERT INTO users (email, password_hash, full_name, role, is_active)
 VALUES (
   'admin@local.host',
-  '$2y$12$N9mB7Qo.5wHwU./6fU7xO.e/e9wYc5b5n9/N.0v.h.8jD7L.g.Y6W',
+  '$2a$12$fz5vkPBWTAqpw/4vEkWVZuoc0g4gDR3uHRfwP12iulNjpw4ajOVIm',
   'Local Admin',
   'owner',
   true

@@ -50,13 +50,16 @@ export function KanbanBoard({ jobId }: Props) {
   const queryClient = useQueryClient();
   const [board, setBoard] = useState<BoardState | null>(null);
 
-  const { isLoading } = useQuery({
+  const { data: apps, isLoading } = useQuery({
     queryKey: ['job-applications-all', jobId],
     queryFn: () => jobsApi.getApplications(jobId).then((r) => r.data.applications),
-    onSuccess: (apps: Application[]) => {
+  });
+
+  React.useEffect(() => {
+    if (apps) {
       setBoard(buildBoard(apps));
-    },
-  } as Parameters<typeof useQuery>[0]);
+    }
+  }, [apps]);
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>

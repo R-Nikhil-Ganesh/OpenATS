@@ -8,7 +8,7 @@ router.use(authenticate);
 
 // ─── GET /summary ─────────────────────────────────────────────────────────────
 
-router.get('/summary', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get('/summary', async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = await withTransaction(async (client) => {
       // Active jobs
