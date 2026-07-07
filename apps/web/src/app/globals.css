@@ -5,28 +5,47 @@
   padding: 0;
 }
 
-/* ─── CSS Variables ─────────────────────────────────────────────────────────── */
+/* ─── CSS Variables — Light (default) ──────────────────────────────────────── */
 :root {
-  /* Colors */
-  --color-bg: #0A0B0D;
-  --color-surface: #111318;
-  --color-surface-2: #161820;
-  --color-border: #1E2229;
-  --color-border-subtle: rgba(255,255,255,0.06);
+  /* Surfaces */
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F1F5F9;
+  --color-surface-3: #F3F4F6;
+  --color-border: #E2E8F0;
+  --color-border-subtle: rgba(15,23,42,0.06);
 
-  --color-primary: #6366F1;
-  --color-primary-light: #818CF8;
-  --color-primary-gradient: linear-gradient(135deg, #6366F1, #818CF8);
+  /* Neutral overlay tint used at various alphas for hover/panel/divider
+     effects (rgba(var(--ink-rgb), X)). Shadows stay black in both themes,
+     as is conventional, just less visible on dark surfaces. */
+  --ink-rgb: 15,23,42;
+  --shadow-rgb: 0,0,0;
 
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
+  /* Accent */
+  --color-primary: #4F46E5;
+  --color-primary-rgb: 79,70,229;
+  --color-primary-light: #6366F1;
+  --color-primary-light-rgb: 99,102,241;
+  --color-primary-gradient: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+
+  /* Semantic */
+  --color-success: #059669;
+  --color-success-rgb: 5,150,105;
+  --color-warning: #D97706;
+  --color-warning-rgb: 217,119,6;
+  --color-danger: #E11D48;
+  --color-danger-rgb: 225,29,72;
+  --color-danger-text: #9F1239;
   --color-muted: #64748B;
-  --color-danger: #F43F5E;
+  --color-muted-rgb: 100,116,139;
 
-  --color-text-primary: #F1F5F9;
-  --color-text-secondary: #94A3B8;
-  --color-text-muted: #64748B;
-  --color-text-disabled: #334155;
+  /* Text */
+  --color-text-primary: #0F172A;
+  --color-text-strong: #1E293B;
+  --color-text-body: #334155;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #94A3B8;
+  --color-text-disabled: #CBD5E1;
 
   /* Radii */
   --radius-sm: 6px;
@@ -47,13 +66,51 @@
   --space-12: 48px;
 
   /* Shadows */
-  --shadow-sm: 0 1px 4px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.4);
-  --shadow-glow: 0 0 20px rgba(99,102,241,0.25);
+  --shadow-sm: 0 1px 2px rgba(var(--shadow-rgb),0.06);
+  --shadow-md: 0 4px 12px rgba(var(--shadow-rgb),0.08);
+  --shadow-lg: 0 8px 24px rgba(var(--shadow-rgb),0.10);
+  --shadow-glow: 0 0 0 3px rgba(var(--color-primary-rgb),0.12);
 
   /* Typography */
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ─── CSS Variables — Dark ──────────────────────────────────────────────────
+   A neutral graphite dark theme — NOT a purple/violet-tinted dark theme.
+   Surfaces are cool neutral grays; the indigo accent is used sparingly,
+   the same way it's used sparingly in the light theme.                    */
+:root[data-theme="dark"] {
+  --color-bg: #0B0D12;
+  --color-surface: #15171D;
+  --color-surface-2: #1B1E26;
+  --color-surface-3: #20232C;
+  --color-border: #272B35;
+  --color-border-subtle: rgba(255,255,255,0.07);
+
+  --ink-rgb: 255,255,255;
+  --shadow-rgb: 0,0,0;
+
+  --color-primary: #6366F1;
+  --color-primary-rgb: 99,102,241;
+  --color-primary-light: #818CF8;
+  --color-primary-light-rgb: 129,140,248;
+
+  --color-success: #10B981;
+  --color-success-rgb: 16,185,129;
+  --color-warning: #F59E0B;
+  --color-warning-rgb: 245,158,11;
+  --color-danger: #F43F5E;
+  --color-danger-rgb: 244,63,94;
+  --color-danger-text: #FDA4AF;
+  --color-muted: #64748B;
+  --color-muted-rgb: 100,116,139;
+
+  --color-text-primary: #F1F5F9;
+  --color-text-strong: #E2E8F0;
+  --color-text-body: #CBD5E1;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #64748B;
+  --color-text-disabled: #334155;
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────────── */
@@ -61,6 +118,11 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
@@ -69,12 +131,13 @@ body {
   color: var(--color-text-primary);
   min-height: 100vh;
   line-height: 1.5;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 /* Selection */
 ::selection {
-  background: rgba(99,102,241,0.35);
-  color: #fff;
+  background: rgba(var(--color-primary-rgb),0.2);
+  color: var(--color-text-primary);
 }
 
 /* ─── Scrollbar ─────────────────────────────────────────────────────────────── */
@@ -86,26 +149,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
+  background: rgba(var(--ink-rgb),0.14);
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.18);
-}
-
-/* ─── Glass Morphism Utilities ──────────────────────────────────────────────── */
-.glass {
-  background: rgba(255,255,255,0.03);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.08);
-}
-
-.glass-dark {
-  background: rgba(0,0,0,0.3);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(var(--ink-rgb),0.22);
 }
 
 /* ─── Skeleton Loading ──────────────────────────────────────────────────────── */
@@ -117,9 +165,9 @@ body {
 .skeleton {
   background: linear-gradient(
     90deg,
-    rgba(255,255,255,0.04) 25%,
-    rgba(255,255,255,0.08) 50%,
-    rgba(255,255,255,0.04) 75%
+    rgba(var(--ink-rgb),0.05) 25%,
+    rgba(var(--ink-rgb),0.09) 50%,
+    rgba(var(--ink-rgb),0.05) 75%
   );
   background-size: 600px 100%;
   animation: shimmer 1.6s infinite linear;
@@ -143,66 +191,6 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-/* ─── Animated background blobs (for auth pages) ───────────────────────────── */
-@keyframes blob1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(40px, -30px) scale(1.1); }
-  66% { transform: translate(-20px, 20px) scale(0.95); }
-}
-@keyframes blob2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(-50px, 20px) scale(1.05); }
-  66% { transform: translate(30px, -40px) scale(0.9); }
-}
-@keyframes blob3 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(20px, 40px) scale(1.08); }
-  66% { transform: translate(-40px, -10px) scale(0.95); }
-}
-
-.blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.25;
-  pointer-events: none;
-}
-
-.blob-1 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, #6366F1, #4F46E5);
-  top: -100px;
-  left: -100px;
-  animation: blob1 12s ease-in-out infinite;
-}
-
-.blob-2 {
-  width: 350px;
-  height: 350px;
-  background: radial-gradient(circle, #818CF8, #6366F1);
-  bottom: -80px;
-  right: 100px;
-  animation: blob2 15s ease-in-out infinite;
-}
-
-.blob-3 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, #4F46E5, #3730A3);
-  top: 40%;
-  right: -80px;
-  animation: blob3 10s ease-in-out infinite;
-}
-
-/* ─── Background grid pattern ───────────────────────────────────────────────── */
-.bg-grid {
-  background-image:
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 40px 40px;
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */

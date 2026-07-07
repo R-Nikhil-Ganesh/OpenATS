@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Bell, ChevronDown, LogOut, User } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Moon, Sun, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '@/lib/api';
+import { useTheme } from '@/providers/ThemeProvider';
 
 type TopBarProps = {
   title: string;
@@ -12,6 +13,7 @@ type TopBarProps = {
 
 export function TopBar({ title }: TopBarProps) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const { data: queueStatus } = useQuery({
@@ -24,9 +26,8 @@ export function TopBar({ title }: TopBarProps) {
     <header
       style={{
         height: 60,
-        background: 'rgba(10,11,13,0.8)',
-        backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: 'var(--color-surface)',
+        borderBottom: '1px solid var(--color-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -41,7 +42,7 @@ export function TopBar({ title }: TopBarProps) {
           margin: 0,
           fontSize: '18px',
           fontWeight: 700,
-          color: '#F1F5F9',
+          color: 'var(--color-text-primary)',
           letterSpacing: '-0.2px',
         }}
       >
@@ -55,9 +56,9 @@ export function TopBar({ title }: TopBarProps) {
             {queueStatus.processing > 0 && (
               <span
                 style={{
-                  background: 'rgba(245,158,11,0.12)',
-                  border: '1px solid rgba(245,158,11,0.3)',
-                  color: '#F59E0B',
+                  background: 'rgba(var(--color-warning-rgb),0.12)',
+                  border: '1px solid rgba(var(--color-warning-rgb),0.3)',
+                  color: 'var(--color-warning)',
                   borderRadius: '20px',
                   padding: '3px 10px',
                   fontSize: '12px',
@@ -70,15 +71,35 @@ export function TopBar({ title }: TopBarProps) {
           </div>
         )}
 
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: '9px',
+            background: 'rgba(var(--ink-rgb),0.04)',
+            border: '1px solid rgba(var(--ink-rgb),0.08)',
+            color: 'var(--color-muted)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+        </button>
+
         {/* Notification bell */}
         <button
           style={{
             width: 36,
             height: 36,
             borderRadius: '9px',
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            color: '#64748B',
+            background: 'rgba(var(--ink-rgb),0.04)',
+            border: '1px solid rgba(var(--ink-rgb),0.08)',
+            color: 'var(--color-muted)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -96,19 +117,19 @@ export function TopBar({ title }: TopBarProps) {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(var(--ink-rgb),0.04)',
+              border: '1px solid rgba(var(--ink-rgb),0.08)',
               borderRadius: '9px',
               padding: '5px 10px 5px 6px',
               cursor: 'pointer',
-              color: '#E2E8F0',
+              color: 'var(--color-text-strong)',
             }}
           >
-            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #818CF8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: '13px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: '13px' }}>
               {user?.fullName?.charAt(0).toUpperCase() ?? '?'}
             </div>
             <span style={{ fontSize: '13px', fontWeight: 500 }}>{user?.fullName}</span>
-            <ChevronDown size={14} color="#64748B" />
+            <ChevronDown size={14} color="var(--color-muted)" />
           </button>
 
           {menuOpen && (
@@ -118,12 +139,12 @@ export function TopBar({ title }: TopBarProps) {
                 right: 0,
                 top: '100%',
                 marginTop: '8px',
-                background: '#111318',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'var(--color-surface)',
+                border: '1px solid rgba(var(--ink-rgb),0.1)',
                 borderRadius: '12px',
                 padding: '8px',
                 minWidth: '160px',
-                boxShadow: '0 16px 40px rgba(0,0,0,0.4)',
+                boxShadow: '0 16px 40px rgba(var(--shadow-rgb),0.112)',
                 zIndex: 100,
               }}
             >
@@ -137,7 +158,7 @@ export function TopBar({ title }: TopBarProps) {
                   width: '100%',
                   background: 'transparent',
                   border: 'none',
-                  color: '#94A3B8',
+                  color: 'var(--color-muted)',
                   cursor: 'pointer',
                   fontSize: '13px',
                 }}
@@ -155,7 +176,7 @@ export function TopBar({ title }: TopBarProps) {
                   width: '100%',
                   background: 'transparent',
                   border: 'none',
-                  color: '#F43F5E',
+                  color: 'var(--color-danger)',
                   cursor: 'pointer',
                   fontSize: '13px',
                 }}

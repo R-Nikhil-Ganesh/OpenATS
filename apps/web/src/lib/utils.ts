@@ -15,35 +15,63 @@ export function formatRelative(date: string | Date): string {
 
 export function tierColor(tier: 'A' | 'B' | 'C' | string | null | undefined): string {
   switch (tier) {
-    case 'A': return '#10B981';
-    case 'B': return '#F59E0B';
-    case 'C': return '#64748B';
-    default: return '#64748B';
+    case 'A': return 'var(--color-success)';
+    case 'B': return 'var(--color-warning)';
+    case 'C': return 'var(--color-muted)';
+    default: return 'var(--color-muted)';
   }
 }
 
 export function tierBg(tier: 'A' | 'B' | 'C' | string | null | undefined): string {
   switch (tier) {
-    case 'A': return 'rgba(16, 185, 129, 0.12)';
-    case 'B': return 'rgba(245, 158, 11, 0.12)';
-    case 'C': return 'rgba(100, 116, 139, 0.12)';
-    default: return 'rgba(100, 116, 139, 0.12)';
+    case 'A': return 'rgba(var(--color-success-rgb), 0.12)';
+    case 'B': return 'rgba(var(--color-warning-rgb), 0.12)';
+    case 'C': return 'rgba(var(--color-muted-rgb), 0.12)';
+    default: return 'rgba(var(--color-muted-rgb), 0.12)';
+  }
+}
+
+/** Bare `--color-x-rgb` reference for building a custom-alpha rgba() at the
+ * call site (e.g. borders) — can't string-concat an alpha suffix onto a
+ * var() reference the way you could with a literal hex color. */
+export function tierRgb(tier: 'A' | 'B' | 'C' | string | null | undefined): string {
+  switch (tier) {
+    case 'A': return 'var(--color-success-rgb)';
+    case 'B': return 'var(--color-warning-rgb)';
+    case 'C': return 'var(--color-muted-rgb)';
+    default: return 'var(--color-muted-rgb)';
+  }
+}
+
+export function statusRgb(status: string | null | undefined): string {
+  switch (status) {
+    case 'applied': return 'var(--color-primary-rgb)';
+    case 'screening': return 'var(--color-primary-light-rgb)';
+    case 'interviewing': return 'var(--color-warning-rgb)';
+    case 'hired': return 'var(--color-success-rgb)';
+    case 'rejected': return 'var(--color-danger-rgb)';
+    case 'queued': return 'var(--color-muted-rgb)';
+    case 'extracting': return 'var(--color-primary-rgb)';
+    case 'scoring': return 'var(--color-warning-rgb)';
+    case 'completed': return 'var(--color-success-rgb)';
+    case 'failed': return 'var(--color-danger-rgb)';
+    default: return 'var(--color-muted-rgb)';
   }
 }
 
 export function statusColor(status: string | null | undefined): string {
   switch (status) {
-    case 'applied': return '#6366F1';
-    case 'screening': return '#818CF8';
-    case 'interviewing': return '#F59E0B';
-    case 'hired': return '#10B981';
-    case 'rejected': return '#F43F5E';
-    case 'queued': return '#64748B';
-    case 'extracting': return '#6366F1';
-    case 'scoring': return '#F59E0B';
-    case 'completed': return '#10B981';
-    case 'failed': return '#F43F5E';
-    default: return '#64748B';
+    case 'applied': return 'var(--color-primary)';
+    case 'screening': return 'var(--color-primary-light)';
+    case 'interviewing': return 'var(--color-warning)';
+    case 'hired': return 'var(--color-success)';
+    case 'rejected': return 'var(--color-danger)';
+    case 'queued': return 'var(--color-muted)';
+    case 'extracting': return 'var(--color-primary)';
+    case 'scoring': return 'var(--color-warning)';
+    case 'completed': return 'var(--color-success)';
+    case 'failed': return 'var(--color-danger)';
+    default: return 'var(--color-muted)';
   }
 }
 
