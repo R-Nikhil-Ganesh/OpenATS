@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, Users } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Users, GitCompareArrows, X } from 'lucide-react';
 import { jobsApi, type Application } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
@@ -27,6 +27,16 @@ export function ApplicationsTable({ jobId }: Props) {
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  // Application ids selected for head-to-head comparison (max 2).
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 2) return prev; // cap at two
+      return [...prev, id];
+    });
+  };
 
   const { data: apps, isLoading } = useQuery({
     queryKey: ['job-applications-all', jobId],
@@ -190,6 +200,7 @@ export function ApplicationsTable({ jobId }: Props) {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
               <thead style={{ background: 'rgba(var(--ink-rgb),0.02)', borderBottom: '1px solid rgba(var(--ink-rgb),0.07)' }}>
                 <tr>
+                  <th style={{ width: 40, padding: '10px 0 10px 14px' }} />
                   <SortHeader label="Candidate" sortableKey="name" />
                   <SortHeader label="Tier" sortableKey="tier" />
                   <SortHeader label="Score" sortableKey="score" />
@@ -198,18 +209,41 @@ export function ApplicationsTable({ jobId }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((app, i) => (
+                {rows.map((app, i) => {
+                  const isSelected = selected.includes(app.id);
+                  const selectDisabled = !isSelected && selected.length >= 2;
+                  return (
                   <tr
                     key={app.id}
                     onClick={() => router.push(`/candidates/${app.id}`)}
                     style={{
                       cursor: 'pointer',
+                      background: isSelected ? 'rgba(var(--color-primary-rgb),0.06)' : 'transparent',
                       borderBottom: i < rows.length - 1 ? '1px solid rgba(var(--ink-rgb),0.05)' : 'none',
                       transition: 'background 0.1s ease',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(var(--ink-rgb),0.025)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(var(--ink-rgb),0.025)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = isSelected ? 'rgba(var(--color-primary-rgb),0.06)' : 'transparent'; }}
                   >
+                    <td
+                      style={{ padding: '12px 0 12px 14px' }}
+                      onClick={(e) => { e.stopPropagation(); if (!selectDisabled) toggleSelect(app.id); }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        disabled={selectDisabled}
+                        onChange={() => {}}
+                        title={selectDisabled ? 'Deselect one to pick a different candidate' : 'Select to compare'}
+                        style={{
+                          width: 16,
+                          height: 16,
+                          accentColor: 'var(--color-primary)',
+                          cursor: selectDisabled ? 'not-allowed' : 'pointer',
+                          verticalAlign: 'middle',
+                        }}
+                      />
+                    </td>
                     <td style={{ padding: '12px 14px', minWidth: 0 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                         <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
@@ -233,12 +267,77 @@ export function ApplicationsTable({ jobId }: Props) {
                       {formatRelative(app.created_at)}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* Floating compare action bar */}
+      {selected.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 28,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 60,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            padding: '10px 12px 10px 18px',
+            background: 'var(--color-surface)',
+            border: '1px solid rgba(var(--ink-rgb),0.12)',
+            borderRadius: '14px',
+            boxShadow: '0 16px 40px rgba(var(--shadow-rgb),0.18)',
+          }}
+        >
+          <span style={{ fontSize: '13px', color: 'var(--color-text-strong)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+            {selected.length === 1 ? '1 selected · pick 1 more' : '2 candidates selected'}
+          </span>
+          <button
+            onClick={() => setSelected([])}
+            title="Clear selection"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--color-muted)',
+              fontSize: '12px',
+              cursor: 'pointer',
+              padding: '4px 6px',
+            }}
+          >
+            <X size={13} /> Clear
+          </button>
+          <button
+            disabled={selected.length !== 2}
+            onClick={() => router.push(`/jobs/${jobId}/compare?a=${selected[0]}&b=${selected[1]}`)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 18px',
+              borderRadius: '9px',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: '#fff',
+              background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
+              boxShadow: selected.length === 2 ? '0 0 20px rgba(var(--color-primary-rgb),0.35)' : 'none',
+              cursor: selected.length === 2 ? 'pointer' : 'not-allowed',
+              opacity: selected.length === 2 ? 1 : 0.5,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <GitCompareArrows size={15} /> Compare
+          </button>
+        </div>
+      )}
     </div>
   );
 }

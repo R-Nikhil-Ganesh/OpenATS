@@ -15,8 +15,10 @@ import jobsRouter from './routes/jobs';
 import uploadRouter from './routes/upload';
 import applicationsRouter from './routes/applications';
 import candidatesRouter from './routes/candidates';
+import compareRouter from './routes/compare';
 import roleHistoryRouter from './routes/roleHistory';
 import dashboardRouter from './routes/dashboard';
+import settingsRouter from './routes/settings';
 
 // SSE
 import { sseHandler } from './sse/events';
@@ -67,8 +69,10 @@ app.use('/jobs', jobsRouter);
 app.use('/jobs', uploadRouter);       // POST /jobs/:jobId/resumes
 app.use('/applications', applicationsRouter);
 app.use('/candidates', candidatesRouter);
+app.use('/compare', compareRouter);
 app.use('/role-history', roleHistoryRouter);
 app.use('/dashboard', dashboardRouter);
+app.use('/settings', settingsRouter);
 
 // SSE endpoint
 app.get('/events', sseHandler);

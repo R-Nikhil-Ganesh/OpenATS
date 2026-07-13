@@ -233,6 +233,40 @@ export const candidatesApi = {
   get: (id: string) => apiClient.get<Candidate>(`/candidates/${id}`),
 };
 
+// ─── Compare ───────────────────────────────────────────────────────────────────
+export type CompareDimension = {
+  name: string;
+  a_assessment: string;
+  b_assessment: string;
+  edge: 'a' | 'b' | 'tie';
+};
+
+export type CompareCandidate = {
+  applicationId: string;
+  fullName: string;
+  tier: 'A' | 'B' | 'C' | null;
+  score: number | null;
+};
+
+export type CompareResult = {
+  candidates: { a: CompareCandidate; b: CompareCandidate };
+  comparison: {
+    dimensions: CompareDimension[];
+    winner: 'a' | 'b' | 'tie';
+    summary: string;
+  };
+};
+
+export type CompareChatMessage = { role: 'user' | 'assistant'; content: string };
+
+export const compareApi = {
+  compare: (applicationIds: [string, string]) =>
+    apiClient.post<CompareResult>('/compare', { applicationIds }),
+
+  ask: (applicationIds: [string, string], question: string, history: CompareChatMessage[]) =>
+    apiClient.post<{ answer: string }>('/compare/ask', { applicationIds, question, history }),
+};
+
 // ─── Role History ──────────────────────────────────────────────────────────────
 export type RoleHistoryEntry = {
   id: string;
@@ -256,6 +290,21 @@ export const roleHistoryApi = {
       '/role-history/similar',
       { params: { job_id: jobId } }
     ),
+};
+
+// ─── Settings ──────────────────────────────────────────────────────────────────
+export type ModelSettings = {
+  scoring_model: string;
+  compare_model: string;
+  chat_model: string;
+};
+
+export const settingsApi = {
+  getModels: () =>
+    apiClient.get<{ selected: ModelSettings; available: string[] }>('/settings/models'),
+
+  updateModels: (updates: Partial<ModelSettings>) =>
+    apiClient.put<{ selected: ModelSettings }>('/settings/models', updates),
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────

@@ -30,6 +30,12 @@ export const config = {
   vllm: {
     baseUrl: process.env.VLLM_BASE_URL || 'http://localhost:8000',
     model: process.env.VLLM_MODEL || 'llama3.2:3b',
+    // Interactive candidate comparison is low-volume, so it can afford a
+    // stronger model than the high-throughput scoring path above.
+    compareModel: process.env.VLLM_COMPARE_MODEL || 'qwen2.5-coder:7b',
+    maxTokens: parseInt(process.env.VLLM_MAX_TOKENS || '800'),
+    temperature: parseFloat(process.env.VLLM_TEMPERATURE || '0.2'),
+    timeoutSeconds: parseFloat(process.env.VLLM_TIMEOUT_SECONDS || '90'),
   },
   frontend: {
     url: process.env.FRONTEND_URL || 'http://localhost:3000',

@@ -3,6 +3,7 @@
 import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Settings as SettingsIcon } from 'lucide-react';
+import { ModelSettingsCard } from '@/components/settings/ModelSettingsCard';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -50,10 +51,9 @@ export default function SettingsPage() {
           </div>
         </div>
         
-        <p style={{ marginTop: '24px', fontSize: '13px', color: 'var(--color-muted)' }}>
-          More settings configurations will be available in a future update.
-        </p>
       </div>
+
+      <ModelSettingsCard />
     </div>
   );
 }

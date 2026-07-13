@@ -12,6 +12,7 @@ from db import (
     TransactionDB,
     close_pool,
     get_pool,
+    get_setting,
     update_application_status,
     update_processing_job,
 )
@@ -245,10 +246,15 @@ async def process_resume(job: Job, job_token: str) -> dict:
         f"SKILLS:\n{normalized.skills_section or 'N/A'}"
     )
 
+    # The scoring model is user-selectable from the Settings page; fall back
+    # to the configured default if nothing has been saved.
+    scoring_model = await get_setting("scoring_model", config.vllm_model)
+
     try:
         scoring_result, raw_response = await score_resume(
             job_description=jd_text,
             normalized_resume=resume_text_for_scoring,
+            model_name=scoring_model,
         )
     except Exception as exc:
         err_msg = f"Scoring failed: {exc}\n{traceback.format_exc()}"
@@ -275,7 +281,7 @@ async def process_resume(job: Job, job_token: str) -> dict:
             VALUES ($1, $2, $3::ai_tier, $4, $5, $6, $7, $8, $9, now())
             """,
             application_id,
-            config.vllm_model,
+            scoring_model,
             scoring_result.tier,
             scoring_result.score,
             json.dumps([s.model_dump() for s in scoring_result.matched_skills]),

@@ -1,6 +1,9 @@
+import logging
 import asyncpg
 from config import config
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 _pool: Optional[asyncpg.Pool] = None
 
@@ -49,6 +52,24 @@ class TransactionDB:
                 await self.conn.execute("COMMIT")
             await self._pool.release(self.conn)
             self.conn = None
+
+
+async def get_setting(key: str, default: str) -> str:
+    """
+    Read a value from the app_settings key/value table, returning ``default``
+    if the key (or the table itself) is missing. Used to pick up model choices
+    saved from the Settings page without a worker restart.
+    """
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            value = await conn.fetchval(
+                "SELECT value FROM app_settings WHERE key = $1", key
+            )
+        return value if value else default
+    except Exception as exc:  # table absent, DB hiccup, etc.
+        logger.warning("get_setting(%s) failed, using default: %s", key, exc)
+        return default
 
 
 async def update_application_status(
