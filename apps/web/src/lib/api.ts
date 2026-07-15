@@ -148,15 +148,26 @@ export type ResumeProfile = {
   education: { degree: string; institution: string; year: string }[];
 };
 
+export type CandidateConflictData = {
+  extracted_email: string | null;
+  extracted_name: string | null;
+  conflicting_candidate_id: string | null;
+  conflicting_candidate_name: string | null;
+  conflicting_application_id: string | null;
+  conflict_type: 'same_job_duplicate' | 'cross_job_merge';
+  detected_at_step: string;
+};
+
 export type Application = {
   id: string;
   job_id: string;
   candidate_id: string;
-  status: 'uploaded' | 'queued' | 'extracting' | 'extracted' | 'scoring' | 'reviewable' | 'screening' | 'interviewing' | 'hired' | 'rejected' | 'archived';
+  status: 'uploaded' | 'queued' | 'extracting' | 'extracted' | 'scoring' | 'reviewable' | 'screening' | 'interviewing' | 'hired' | 'rejected' | 'archived' | 'duplicate_candidate';
   tier: 'A' | 'B' | 'C' | null;
   score: number | null;
-  processing_status: 'queued' | 'extracting' | 'extracted' | 'scoring' | 'completed' | 'failed';
+  processing_status: 'queued' | 'extracting' | 'extracted' | 'scoring' | 'completed' | 'failed' | 'needs_review';
   error_message?: string;
+  conflict_data?: CandidateConflictData | null;
   created_at: string;
   updated_at: string;
   candidate?: Candidate;
@@ -196,6 +207,7 @@ export const applicationsApi = {
           score: row.score,
           processing_status: row.processing_status,
           error_message: row.error_message,
+          conflict_data: row.conflict_data ?? null,
           created_at: row.applied_at,
           updated_at: row.updated_at,
           candidate: {
@@ -226,6 +238,12 @@ export const applicationsApi = {
     apiClient.patch<Application>(`/applications/${id}/status`, data),
 
   reprocess: (id: string) => apiClient.post<Application>(`/applications/${id}/reprocess`),
+
+  resolveConflict: (id: string, action: 'override' | 'discard') =>
+    apiClient.post<{ status: string; applicationId?: string; bullmqJobId?: string }>(
+      `/applications/${id}/resolve-conflict`,
+      { action }
+    ),
 
   getHistory: (id: string) =>
     apiClient.get<{ history: StatusHistoryEntry[] }>(`/applications/${id}/history`),

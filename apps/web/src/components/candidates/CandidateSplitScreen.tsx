@@ -12,11 +12,13 @@ import {
   RefreshCw,
   CheckCircle,
   XCircle,
+  AlertTriangle,
 } from 'lucide-react';
-import { applicationsApi, type StatusHistoryEntry } from '@/lib/api';
+import { applicationsApi, type StatusHistoryEntry, type CandidateConflictData } from '@/lib/api';
 import { getAccessToken } from '@/lib/auth';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { ProfileLinks } from '@/components/ui/ProfileLinks';
 import { ProfileDetails } from './ProfileDetails';
@@ -335,6 +337,60 @@ function HistoryTab({ entries }: { entries: StatusHistoryEntry[] }) {
   );
 }
 
+function ConflictBanner({
+  conflict,
+  onOverride,
+  onDiscard,
+  loading,
+}: {
+  conflict: CandidateConflictData | null | undefined;
+  onOverride: () => void;
+  onDiscard: () => void;
+  loading: boolean;
+}) {
+  if (!conflict) return null;
+  const sameJob = conflict.conflict_type === 'same_job_duplicate';
+
+  return (
+    <div
+      style={{
+        margin: '16px 24px 0',
+        padding: '14px 16px',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '12px',
+        background: 'rgba(var(--color-warning-rgb),0.08)',
+        border: '1px solid rgba(var(--color-warning-rgb),0.3)',
+        borderRadius: '10px',
+      }}
+    >
+      <AlertTriangle size={18} color="var(--color-warning)" style={{ flexShrink: 0, marginTop: 2 }} />
+      <div style={{ flex: 1 }}>
+        <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 700, color: 'var(--color-text-strong)' }}>
+          This resume matches an existing candidate
+        </p>
+        <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--color-text-body)', lineHeight: 1.5 }}>
+          {conflict.extracted_email} already belongs to{' '}
+          <strong>{conflict.conflicting_candidate_name ?? 'another candidate'}</strong>
+          {sameJob
+            ? ' — who already has an application for this job.'
+            : ' — for a different job.'}{' '}
+          Override to {sameJob ? "replace that application's resume with this one" : 'merge these into one candidate'}
+          , or keep them separate.
+        </p>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="primary" size="sm" onClick={onOverride} disabled={loading}>
+            Override
+          </Button>
+          <Button variant="outline" size="sm" onClick={onDiscard} disabled={loading}>
+            {sameJob ? 'Discard this upload' : 'Keep separate'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CandidateSplitScreen({ applicationId }: Props) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('analysis');
@@ -365,6 +421,16 @@ export function CandidateSplitScreen({ applicationId }: Props) {
   const reprocessMutation = useMutation({
     mutationFn: () => applicationsApi.reprocess(applicationId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['application', applicationId] }),
+  });
+
+  const [confirmAction, setConfirmAction] = useState<'override' | 'discard' | null>(null);
+
+  const resolveConflictMutation = useMutation({
+    mutationFn: (action: 'override' | 'discard') => applicationsApi.resolveConflict(applicationId, action),
+    onSuccess: () => {
+      setConfirmAction(null);
+      queryClient.invalidateQueries({ queryKey: ['application', applicationId] });
+    },
   });
 
   if (isLoading || !app) {
@@ -531,6 +597,15 @@ export function CandidateSplitScreen({ applicationId }: Props) {
           </div>
         </div>
 
+        {app.status === 'duplicate_candidate' && (
+          <ConflictBanner
+            conflict={app.conflict_data}
+            loading={resolveConflictMutation.isPending}
+            onOverride={() => setConfirmAction('override')}
+            onDiscard={() => setConfirmAction('discard')}
+          />
+        )}
+
         {/* Tabs */}
         <div
           style={{
@@ -641,6 +716,37 @@ export function CandidateSplitScreen({ applicationId }: Props) {
           </Button>
         </div>
       </div>
+
+      <Modal
+        open={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        title={confirmAction === 'override' ? 'Override existing candidate?' : 'Keep as separate candidate?'}
+        width="480px"
+      >
+        <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--color-text-body)', lineHeight: 1.6 }}>
+          {confirmAction === 'override' && app.conflict_data?.conflict_type === 'same_job_duplicate' &&
+            `This will replace ${app.conflict_data.conflicting_candidate_name ?? 'the existing candidate'}'s current application resume with this newer upload, and remove this duplicate entry.`}
+          {confirmAction === 'override' && app.conflict_data?.conflict_type === 'cross_job_merge' &&
+            `This will merge this application into ${app.conflict_data.conflicting_candidate_name ?? 'the existing candidate'}'s record, treating them as one person.`}
+          {confirmAction === 'discard' && app.conflict_data?.conflict_type === 'same_job_duplicate' &&
+            'This will delete this duplicate upload. The existing application for this candidate and job is left untouched.'}
+          {confirmAction === 'discard' && app.conflict_data?.conflict_type === 'cross_job_merge' &&
+            'This will keep this application under its own candidate identity, without merging contact details with the matching candidate.'}
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <Button variant="ghost" size="md" onClick={() => setConfirmAction(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant={confirmAction === 'discard' ? 'danger' : 'primary'}
+            size="md"
+            loading={resolveConflictMutation.isPending}
+            onClick={() => confirmAction && resolveConflictMutation.mutate(confirmAction)}
+          >
+            Confirm
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

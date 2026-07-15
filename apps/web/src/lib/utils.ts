@@ -55,6 +55,7 @@ export function statusRgb(status: string | null | undefined): string {
     case 'scoring': return 'var(--color-warning-rgb)';
     case 'completed': return 'var(--color-success-rgb)';
     case 'failed': return 'var(--color-danger-rgb)';
+    case 'duplicate_candidate': return 'var(--color-warning-rgb)';
     default: return 'var(--color-muted-rgb)';
   }
 }
@@ -71,6 +72,7 @@ export function statusColor(status: string | null | undefined): string {
     case 'scoring': return 'var(--color-warning)';
     case 'completed': return 'var(--color-success)';
     case 'failed': return 'var(--color-danger)';
+    case 'duplicate_candidate': return 'var(--color-warning)';
     default: return 'var(--color-muted)';
   }
 }
