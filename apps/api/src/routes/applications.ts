@@ -40,6 +40,10 @@ const patchStatusSchema = z.object({
 
 const reprocessSchema = z.object({});
 
+const resolveConflictSchema = z.object({
+  action: z.enum(['override', 'discard']),
+});
+
 // ─── GET /:id — Full application detail ──────────────────────────────────────
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -58,7 +62,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
            ae.raw_response, ae.model_name, ae.scored_at AS evaluated_at,
            rpj.status AS processing_status,
 
-           rpj.error_message, rpj.attempts, rpj.bullmq_job_id,
+           rpj.error_message, rpj.attempts, rpj.bullmq_job_id, rpj.conflict_data,
            rpj.started_at AS processing_started_at,
            rpj.completed_at AS processing_completed_at
          FROM applications a
@@ -281,6 +285,197 @@ router.post(
       });
 
       res.json({ applicationId: result.appId, bullmqJobId: bullJob.id, status: 'queued' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── POST /:id/resolve-conflict — Resolve a duplicate-candidate pause ────────
+//
+// The worker parks an application in 'duplicate_candidate' when the resume's
+// extracted email collides with a *different* existing candidate row. The
+// recruiter decides here:
+//   - 'override': same job as an existing application → treat this upload as
+//     a newer resume for that same application (swap resume, drop the
+//     duplicate). Different job → merge into the existing candidate identity.
+//   - 'discard': same job → drop this duplicate upload entirely, existing
+//     application stands untouched. Different job → keep this as a distinct
+//     candidate (do not merge identities) and continue processing it.
+
+router.post(
+  '/:id/resolve-conflict',
+  requireRole('owner'),
+  validate(resolveConflictSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const { action } = req.body as z.infer<typeof resolveConflictSchema>;
+
+    try {
+      const outcome = await withTransaction(async (client) => {
+        const appRes = await client.query(
+          `SELECT a.id, a.status, a.job_id, a.candidate_id, a.resume_id,
+                  rpj.id AS proc_job_id, rpj.conflict_data
+           FROM applications a
+           JOIN LATERAL (
+             SELECT * FROM resume_processing_jobs
+             WHERE application_id = a.id
+             ORDER BY created_at DESC LIMIT 1
+           ) rpj ON true
+           WHERE a.id = $1`,
+          [req.params.id]
+        );
+
+        const app = appRes.rows[0];
+        if (!app) return { kind: 'not_found' as const };
+
+        if (app.status !== 'duplicate_candidate' || !app.conflict_data) {
+          throw Object.assign(
+            new Error('Application has no pending candidate conflict'),
+            { statusCode: 422, code: 'NO_CONFLICT' }
+          );
+        }
+
+        const conflict = app.conflict_data as {
+          conflicting_candidate_id: string | null;
+          conflicting_application_id: string | null;
+          conflict_type: 'same_job_duplicate' | 'cross_job_merge';
+        };
+
+        if (action === 'discard' && conflict.conflict_type === 'same_job_duplicate') {
+          // Drop this duplicate upload; the pre-existing application for this
+          // candidate + job is untouched.
+          await client.query('DELETE FROM resume_processing_jobs WHERE application_id = $1', [app.id]);
+          await client.query('DELETE FROM applications WHERE id = $1', [app.id]);
+          await client.query(
+            `DELETE FROM candidates
+             WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM applications WHERE candidate_id = $1)`,
+            [app.candidate_id]
+          );
+          return { kind: 'discarded' as const };
+        }
+
+        if (action === 'discard') {
+          // cross_job_merge discard: keep this as its own candidate identity
+          // and resume processing without retrying the email merge.
+          await client.query(
+            `UPDATE resume_processing_jobs
+             SET status = 'queued', conflict_data = NULL, error_message = NULL,
+                 attempts = 0, updated_at = now()
+             WHERE id = $1`,
+            [app.proc_job_id]
+          );
+          await client.query(
+            "UPDATE applications SET status = 'queued', updated_at = now() WHERE id = $1",
+            [app.id]
+          );
+          return {
+            kind: 'requeue' as const,
+            applicationId: app.id as string,
+            jobId: app.job_id as string,
+            resumeId: app.resume_id as string,
+            keepSeparate: true,
+          };
+        }
+
+        // action === 'override'
+        if (conflict.conflict_type === 'same_job_duplicate' && conflict.conflicting_application_id) {
+          const targetApplicationId = conflict.conflicting_application_id;
+
+          await client.query(
+            `UPDATE applications SET resume_id = $1, status = 'queued', updated_at = now() WHERE id = $2`,
+            [app.resume_id, targetApplicationId]
+          );
+          await client.query(`UPDATE resumes SET candidate_id = $1 WHERE id = $2`, [
+            conflict.conflicting_candidate_id,
+            app.resume_id,
+          ]);
+          await client.query('DELETE FROM application_ai_evaluations WHERE application_id = $1', [
+            targetApplicationId,
+          ]);
+          await client.query(
+            `UPDATE resume_processing_jobs
+             SET status = 'queued', error_message = NULL, conflict_data = NULL,
+                 bullmq_job_id = NULL, started_at = NULL, completed_at = NULL,
+                 progress = 0, attempts = 0, updated_at = now()
+             WHERE application_id = $1`,
+            [targetApplicationId]
+          );
+          await client.query('DELETE FROM resume_processing_jobs WHERE application_id = $1', [app.id]);
+          await client.query('DELETE FROM applications WHERE id = $1', [app.id]);
+          await client.query('DELETE FROM candidates WHERE id = $1', [app.candidate_id]);
+
+          return {
+            kind: 'requeue' as const,
+            applicationId: targetApplicationId,
+            jobId: app.job_id as string,
+            resumeId: app.resume_id as string,
+            keepSeparate: false,
+          };
+        }
+
+        // cross_job_merge override: merge this application's candidate
+        // identity into the pre-existing candidate.
+        await client.query(
+          `UPDATE applications SET candidate_id = $1, status = 'queued', updated_at = now() WHERE id = $2`,
+          [conflict.conflicting_candidate_id, app.id]
+        );
+        await client.query(`UPDATE resumes SET candidate_id = $1 WHERE id = $2`, [
+          conflict.conflicting_candidate_id,
+          app.resume_id,
+        ]);
+        await client.query(
+          `UPDATE resume_processing_jobs
+           SET status = 'queued', conflict_data = NULL, error_message = NULL,
+               attempts = 0, updated_at = now()
+           WHERE id = $1`,
+          [app.proc_job_id]
+        );
+        await client.query('DELETE FROM candidates WHERE id = $1', [app.candidate_id]);
+
+        return {
+          kind: 'requeue' as const,
+          applicationId: app.id as string,
+          jobId: app.job_id as string,
+          resumeId: app.resume_id as string,
+          keepSeparate: false,
+        };
+      });
+
+      if (outcome.kind === 'not_found') {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Application not found' } });
+        return;
+      }
+
+      if (outcome.kind === 'discarded') {
+        res.json({ status: 'discarded' });
+        return;
+      }
+
+      const resumeRes = await withTransaction((client) =>
+        client.query('SELECT storage_path FROM resumes WHERE id = $1', [outcome.resumeId])
+      );
+      const resumePath = resumeRes.rows[0]?.storage_path;
+
+      const bullJob = await resumeQueue.add(
+        'process-resume',
+        {
+          applicationId: outcome.applicationId,
+          resumePath,
+          jobId: outcome.jobId,
+          reprocess: true,
+          keepSeparate: outcome.keepSeparate,
+        },
+        { jobId: `reprocess-${outcome.applicationId}-${Date.now()}` }
+      );
+
+      await withTransaction((client) =>
+        client.query('UPDATE resume_processing_jobs SET bullmq_job_id = $1 WHERE application_id = $2', [
+          bullJob.id,
+          outcome.applicationId,
+        ])
+      );
+
+      res.json({ applicationId: outcome.applicationId, bullmqJobId: bullJob.id, status: 'queued' });
     } catch (err) {
       next(err);
     }

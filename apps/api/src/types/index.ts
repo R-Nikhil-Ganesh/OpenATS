@@ -12,7 +12,8 @@ export type ApplicationStatus =
   | 'hired'
   | 'rejected'
   | 'archived'
-  | 'failed';
+  | 'failed'
+  | 'duplicate_candidate';
 
 export type AiTier = 'A' | 'B' | 'C' | 'unscored';
 
@@ -33,7 +34,8 @@ export type ProcessingJobStatus =
   | 'extracted'
   | 'scoring'
   | 'completed'
-  | 'failed';
+  | 'failed'
+  | 'needs_review';
 
 // ─── Database Row Interfaces ─────────────────────────────────────────────────
 
@@ -143,6 +145,16 @@ export interface StateHistory {
   changed_at: Date | null;
 }
 
+export interface CandidateConflictData {
+  extracted_email: string | null;
+  extracted_name: string | null;
+  conflicting_candidate_id: string | null;
+  conflicting_candidate_name: string | null;
+  conflicting_application_id: string | null;
+  conflict_type: 'same_job_duplicate' | 'cross_job_merge';
+  detected_at_step: string;
+}
+
 export interface ProcessingJob {
   id: string;
   application_id: string;
@@ -151,6 +163,7 @@ export interface ProcessingJob {
   progress: number;
   error_message: string | null;
   error_stack: string | null;
+  conflict_data: CandidateConflictData | null;
   attempts: number;
   started_at: Date | null;
   completed_at: Date | null;
