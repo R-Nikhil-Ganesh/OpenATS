@@ -1,3 +1,4 @@
+import json
 import logging
 import asyncpg
 from config import config
@@ -82,6 +83,45 @@ async def update_application_status(
             status,
             application_id,
         )
+
+
+async def get_candidate_by_email(email: str) -> Optional[dict]:
+    """Look up an existing candidate by email, if any."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, full_name FROM candidates WHERE email = $1", email
+        )
+    return dict(row) if row else None
+
+
+async def find_application(candidate_id: str, job_id: str) -> Optional[dict]:
+    """Look up an existing application for a given candidate + job, if any."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, status FROM applications WHERE candidate_id = $1 AND job_id = $2",
+            candidate_id,
+            job_id,
+        )
+    return dict(row) if row else None
+
+
+async def record_candidate_conflict(
+    application_id: str, proc_job_id: str, conflict: dict
+) -> None:
+    """
+    Pause a job that hit a candidates.email collision instead of letting it
+    crash-retry-fail: persist what was found so a recruiter can decide
+    whether to override (merge) or discard, then park the application in
+    'duplicate_candidate' for review.
+    """
+    await update_processing_job(
+        proc_job_id,
+        status="needs_review",
+        conflict_data=json.dumps(conflict),
+    )
+    await update_application_status(application_id, "duplicate_candidate")
 
 
 async def update_processing_job(

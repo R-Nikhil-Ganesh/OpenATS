@@ -5,14 +5,18 @@ import signal
 import traceback
 from datetime import datetime, timezone
 
+import asyncpg
 from bullmq import Job, Worker
 
 from config import config
 from db import (
     TransactionDB,
     close_pool,
+    find_application,
+    get_candidate_by_email,
     get_pool,
     get_setting,
+    record_candidate_conflict,
     update_application_status,
     update_processing_job,
 )
@@ -75,6 +79,49 @@ async def _fail_job(
         logger.error("_fail_job: could not update processing job: %s", inner)
 
 
+async def _pause_for_candidate_conflict(
+    *,
+    application_id: str,
+    proc_job_id: str,
+    job_id: str,
+    extracted_email: str,
+    extracted_name: str,
+    step: str,
+) -> None:
+    """
+    Called when merging extracted resume fields into ``candidates`` hit a
+    unique-email collision with a different, pre-existing candidate. Instead
+    of letting that exception crash the job (which just retries into the
+    same error 3x and leaves the application frozen), look up who the
+    collision is with and pause the application for a recruiter decision.
+    """
+    conflicting_candidate = await get_candidate_by_email(extracted_email) if extracted_email else None
+    conflicting_application = None
+    if conflicting_candidate:
+        conflicting_application = await find_application(conflicting_candidate["id"], job_id)
+
+    conflict_payload = {
+        "extracted_email": extracted_email,
+        "extracted_name": extracted_name,
+        "conflicting_candidate_id": str(conflicting_candidate["id"]) if conflicting_candidate else None,
+        "conflicting_candidate_name": conflicting_candidate["full_name"] if conflicting_candidate else None,
+        "conflicting_application_id": str(conflicting_application["id"]) if conflicting_application else None,
+        # Same candidate + same job already has an application → this upload
+        # is a newer resume for that same application. Different job → this
+        # is genuinely the same person applying elsewhere; merge identities.
+        "conflict_type": "same_job_duplicate" if conflicting_application else "cross_job_merge",
+        "detected_at_step": step,
+    }
+    logger.warning(
+        "Candidate email conflict for app %s: email=%s conflicting_candidate=%s type=%s",
+        application_id,
+        extracted_email,
+        conflict_payload["conflicting_candidate_id"],
+        conflict_payload["conflict_type"],
+    )
+    await record_candidate_conflict(application_id, proc_job_id, conflict_payload)
+
+
 # ---------------------------------------------------------------------------
 # Main processing pipeline
 # ---------------------------------------------------------------------------
@@ -90,11 +137,16 @@ async def process_resume(job: Job, job_token: str) -> dict:
         "jobId":         str,   # job_requisition id
         "reprocess":     bool,  # optional
         "stage":         str,   # optional hint
+        "keepSeparate":  bool,  # optional — recruiter chose to keep this
+                                # candidate distinct after a prior email
+                                # conflict; skip re-merging the email so we
+                                # don't immediately hit the same conflict.
     }
     """
     data: dict = job.data
     application_id: str = data["applicationId"]
     resume_path: str = data["resumePath"]
+    keep_separate: bool = bool(data.get("keepSeparate"))
 
     logger.info(
         "▶  Job %s | app=%s | path=%s",
@@ -183,23 +235,36 @@ async def process_resume(job: Job, job_token: str) -> dict:
             resume_id,
         )
 
-        if normalized.candidate_email or normalized.candidate_name:
-            await conn.execute(
-                """
-                UPDATE candidates
-                SET full_name  = COALESCE($1, full_name),
-                    email      = COALESCE(NULLIF($2, ''), email),
-                    phone      = COALESCE($3, phone),
-                    updated_at = now()
-                WHERE id = (
-                    SELECT candidate_id FROM applications WHERE id = $4
+    merge_email = None if keep_separate else normalized.candidate_email
+    if merge_email or normalized.candidate_name:
+        try:
+            async with TransactionDB() as conn:
+                await conn.execute(
+                    """
+                    UPDATE candidates
+                    SET full_name  = COALESCE($1, full_name),
+                        email      = COALESCE(NULLIF($2, ''), email),
+                        phone      = COALESCE($3, phone),
+                        updated_at = now()
+                    WHERE id = (
+                        SELECT candidate_id FROM applications WHERE id = $4
+                    )
+                    """,
+                    normalized.candidate_name,
+                    merge_email or "",
+                    normalized.candidate_phone,
+                    application_id,
                 )
-                """,
-                normalized.candidate_name,
-                normalized.candidate_email or "",
-                normalized.candidate_phone,
-                application_id,
+        except asyncpg.exceptions.UniqueViolationError:
+            await _pause_for_candidate_conflict(
+                application_id=application_id,
+                proc_job_id=proc_job_id,
+                job_id=data["jobId"],
+                extracted_email=normalized.candidate_email,
+                extracted_name=normalized.candidate_name,
+                step="normalize",
             )
+            return {"status": "duplicate_candidate"}
 
     await update_application_status(application_id, "extracted")
     await update_processing_job(
@@ -231,29 +296,42 @@ async def process_resume(job: Job, job_token: str) -> dict:
                 resume_id,
             )
 
-            if profile.email or profile.name or profile.links.linkedin or profile.links.github:
-                await conn.execute(
-                    """
-                    UPDATE candidates
-                    SET full_name    = COALESCE(full_name, $1),
-                        email        = COALESCE(email, NULLIF($2, '')),
-                        phone        = COALESCE(phone, NULLIF($3, '')),
-                        linkedin_url = COALESCE(linkedin_url, NULLIF($4, '')),
-                        github_url   = COALESCE(github_url, NULLIF($5, '')),
-                        location     = COALESCE(location, NULLIF($6, '')),
-                        updated_at   = now()
-                    WHERE id = (
-                        SELECT candidate_id FROM applications WHERE id = $7
+        merge_profile_email = None if keep_separate else profile.email
+        if merge_profile_email or profile.name or profile.links.linkedin or profile.links.github:
+            try:
+                async with TransactionDB() as conn:
+                    await conn.execute(
+                        """
+                        UPDATE candidates
+                        SET full_name    = COALESCE(full_name, $1),
+                            email        = COALESCE(email, NULLIF($2, '')),
+                            phone        = COALESCE(phone, NULLIF($3, '')),
+                            linkedin_url = COALESCE(linkedin_url, NULLIF($4, '')),
+                            github_url   = COALESCE(github_url, NULLIF($5, '')),
+                            location     = COALESCE(location, NULLIF($6, '')),
+                            updated_at   = now()
+                        WHERE id = (
+                            SELECT candidate_id FROM applications WHERE id = $7
+                        )
+                        """,
+                        profile.name or None,
+                        merge_profile_email,
+                        profile.phone,
+                        profile.links.linkedin,
+                        profile.links.github,
+                        profile.location,
+                        application_id,
                     )
-                    """,
-                    profile.name or None,
-                    profile.email,
-                    profile.phone,
-                    profile.links.linkedin,
-                    profile.links.github,
-                    profile.location,
-                    application_id,
+            except asyncpg.exceptions.UniqueViolationError:
+                await _pause_for_candidate_conflict(
+                    application_id=application_id,
+                    proc_job_id=proc_job_id,
+                    job_id=data["jobId"],
+                    extracted_email=profile.email,
+                    extracted_name=profile.name,
+                    step="profile",
                 )
+                return {"status": "duplicate_candidate"}
         logger.info("Profile built for resume %s (model=%s)", resume_id, profile_model)
     except Exception as exc:
         logger.warning("Profile step failed (non-fatal): %s", exc)
