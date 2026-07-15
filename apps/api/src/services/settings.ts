@@ -10,14 +10,15 @@ import { config } from '../config';
 // a service restart.
 // ---------------------------------------------------------------------------
 
-export type ModelKey = 'scoring_model' | 'compare_model' | 'chat_model';
+export type ModelKey = 'scoring_model' | 'compare_model' | 'chat_model' | 'profile_model';
 
-export const MODEL_KEYS: ModelKey[] = ['scoring_model', 'compare_model', 'chat_model'];
+export const MODEL_KEYS: ModelKey[] = ['scoring_model', 'compare_model', 'chat_model', 'profile_model'];
 
 const MODEL_DEFAULTS: Record<ModelKey, string> = {
   scoring_model: config.vllm.model,
   compare_model: config.vllm.compareModel,
   chat_model: config.vllm.compareModel,
+  profile_model: config.vllm.profileModel,
 };
 
 /** Fetch all model selections, falling back to config defaults for any missing key. */

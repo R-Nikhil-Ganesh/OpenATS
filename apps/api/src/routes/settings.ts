@@ -32,6 +32,7 @@ const putModelsSchema = z
     scoring_model: modelName.optional(),
     compare_model: modelName.optional(),
     chat_model: modelName.optional(),
+    profile_model: modelName.optional(),
   })
   .refine((obj) => MODEL_KEYS.some((k) => obj[k] !== undefined), {
     message: 'Provide at least one model setting to update',

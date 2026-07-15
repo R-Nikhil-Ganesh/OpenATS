@@ -30,16 +30,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           background: 'var(--color-bg)',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
           <span
             style={{
-              fontSize: '28px',
-              fontWeight: 900,
-              background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              letterSpacing: '-1px',
+              fontSize: 22,
+              fontWeight: 700,
+              color: 'var(--color-text-primary)',
+              letterSpacing: '-0.4px',
             }}
           >
             openats
@@ -57,13 +54,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <SSEProvider>
-      <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)' }}>
+      <div
+        style={{
+          display: 'flex',
+          height: '100vh',
+          overflow: 'hidden',
+          background: 'var(--color-bg)',
+        }}
+      >
         <Sidebar />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100vh',
+            overflow: 'hidden',
+          }}
+        >
           <TopBar title="OpenATS" />
           <main
             style={{
               flex: 1,
+              minHeight: 0,
               overflow: 'auto',
               padding: '28px',
             }}

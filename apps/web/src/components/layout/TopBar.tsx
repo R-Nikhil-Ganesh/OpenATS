@@ -125,7 +125,20 @@ export function TopBar({ title }: TopBarProps) {
               color: 'var(--color-text-strong)',
             }}
           >
-            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: '13px' }}>
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 7,
+                background: 'rgba(var(--color-primary-rgb),0.12)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--color-primary)',
+                fontWeight: 700,
+                fontSize: 12,
+              }}
+            >
               {user?.fullName?.charAt(0).toUpperCase() ?? '?'}
             </div>
             <span style={{ fontSize: '13px', fontWeight: 500 }}>{user?.fullName}</span>

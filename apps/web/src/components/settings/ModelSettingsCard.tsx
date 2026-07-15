@@ -12,6 +12,11 @@ type FieldKey = keyof ModelSettings;
 
 const FIELDS: { key: FieldKey; label: string; description: string }[] = [
   {
+    key: 'profile_model',
+    label: 'Profile extraction',
+    description: 'Converts each resume into a structured profile (name, links, skills). High volume — favor a fast model.',
+  },
+  {
     key: 'scoring_model',
     label: 'Resume scoring',
     description: 'Scores each uploaded resume against the job. High volume — favor a fast model.',

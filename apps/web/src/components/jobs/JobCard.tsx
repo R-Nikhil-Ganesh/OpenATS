@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Users, Eye } from 'lucide-react';
+import { Users, Eye, Building2, MapPin, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { Job } from '@/lib/api';
@@ -13,6 +13,7 @@ type JobCardProps = {
 
 export function JobCard({ job }: JobCardProps) {
   const [hovered, setHovered] = React.useState(false);
+  const processing = job.processing_count ?? 0;
 
   return (
     <div
@@ -20,58 +21,59 @@ export function JobCard({ job }: JobCardProps) {
       onMouseLeave={() => setHovered(false)}
       style={{
         background: 'var(--color-surface)',
-        border: hovered
-          ? '1px solid rgba(var(--color-primary-rgb),0.4)'
-          : '1px solid var(--color-border)',
-        borderRadius: '14px',
-        padding: '22px',
+        border: '1px solid var(--color-border)',
+        borderRadius: 12,
+        padding: 20,
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        gap: 14,
         boxShadow: hovered
-          ? '0 8px 32px rgba(var(--color-primary-rgb),0.18)'
-          : '0 2px 8px rgba(var(--shadow-rgb),0.056)',
-        transition: 'all 0.2s ease',
+          ? '0 2px 12px rgba(var(--shadow-rgb),0.08)'
+          : '0 1px 2px rgba(var(--shadow-rgb),0.04)',
+        transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
+        borderColor: hovered ? 'rgba(var(--ink-rgb),0.15)' : 'var(--color-border)',
       }}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-        <div>
-          <h3
-            style={{
-              margin: '0 0 8px',
-              fontSize: '17px',
-              fontWeight: 700,
-              color: 'var(--color-text-primary)',
-              lineHeight: 1.3,
-            }}
-          >
-            {job.title}
-          </h3>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            <Badge status="applied">{job.department}</Badge>
-            <Badge status={job.status}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</Badge>
-            {job.location && (
-              <span style={{ fontSize: '12px', color: 'var(--color-muted)' }}>{job.location}</span>
-            )}
-          </div>
-        </div>
-        {(job.processing_count ?? 0) > 0 && (
+      {/* Header: title + status */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+        <h3
+          style={{
+            margin: 0,
+            fontSize: 16,
+            fontWeight: 700,
+            color: 'var(--color-text-primary)',
+            lineHeight: 1.35,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {job.title}
+        </h3>
+        <Badge status={job.status} size="sm" />
+      </div>
+
+      {/* Meta: department + location + processing */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 14px' }}>
+        <MetaItem icon={<Building2 size={13} />} label={job.department} />
+        {job.location && <MetaItem icon={<MapPin size={13} />} label={job.location} />}
+        {processing > 0 && (
           <span
             style={{
-              background: 'rgba(var(--color-warning-rgb),0.12)',
-              border: '1px solid rgba(var(--color-warning-rgb),0.3)',
-              borderRadius: '20px',
-              padding: '3px 10px',
-              fontSize: '11px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 11.5,
               fontWeight: 600,
               color: 'var(--color-warning)',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
+              background: 'rgba(var(--color-warning-rgb),0.10)',
+              border: '1px solid rgba(var(--color-warning-rgb),0.28)',
+              borderRadius: 999,
+              padding: '2px 9px',
+              lineHeight: 1.4,
             }}
           >
-            {job.processing_count} processing
+            <Loader2 size={11} className="spin-slow" />
+            {processing} processing
           </span>
         )}
       </div>
@@ -79,15 +81,16 @@ export function JobCard({ job }: JobCardProps) {
       {/* Stats row */}
       <div
         style={{
-          display: 'flex',
-          gap: '16px',
-          padding: '12px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 4,
+          padding: '12px 4px',
           background: 'rgba(var(--ink-rgb),0.02)',
-          borderRadius: '9px',
-          border: '1px solid rgba(var(--ink-rgb),0.05)',
+          borderRadius: 9,
+          border: '1px solid var(--color-border-subtle)',
         }}
       >
-        <Stat label="Total" value={job.total_applicants ?? 0} icon={<Users size={13} />} color="var(--color-muted)" />
+        <Stat label="Total" value={job.total_applicants ?? 0} icon={<Users size={12} />} color="var(--color-text-primary)" />
         <Stat label="Tier A" value={job.tier_a_count ?? 0} color="var(--color-success)" />
         <Stat label="Tier B" value={job.tier_b_count ?? 0} color="var(--color-warning)" />
         <Stat label="Tier C" value={job.tier_c_count ?? 0} color="var(--color-muted)" />
@@ -106,6 +109,24 @@ export function JobCard({ job }: JobCardProps) {
   );
 }
 
+function MetaItem({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        fontSize: 12.5,
+        color: 'var(--color-muted)',
+        lineHeight: 1.4,
+      }}
+    >
+      <span style={{ display: 'inline-flex', color: 'var(--color-text-secondary)' }}>{icon}</span>
+      {label}
+    </span>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -118,15 +139,20 @@ function Stat({
   color: string;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
-      <span style={{ fontSize: '18px', fontWeight: 700, color }}>{value}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <span style={{ fontSize: 17, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+        {value}
+      </span>
       <span
         style={{
-          fontSize: '11px',
-          color: 'var(--color-muted)',
-          display: 'flex',
+          fontSize: 10.5,
+          color: 'var(--color-text-secondary)',
+          display: 'inline-flex',
           alignItems: 'center',
-          gap: '3px',
+          gap: 3,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          fontWeight: 600,
         }}
       >
         {icon} {label}

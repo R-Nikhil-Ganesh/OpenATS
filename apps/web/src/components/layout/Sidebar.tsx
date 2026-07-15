@@ -8,8 +8,8 @@ import {
   Briefcase,
   History,
   Settings,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -19,6 +19,30 @@ const navItems = [
   { label: 'Role History', href: '/role-history', icon: History },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
+
+/** Square accent tile used as the collapsed-state logo mark. */
+function LogoMark({ size = 28 }: { size?: number }) {
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 7,
+        background: 'var(--color-primary)',
+        color: '#fff',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: size <= 22 ? 12 : 14,
+        fontWeight: 800,
+        letterSpacing: '-0.02em',
+        flexShrink: 0,
+      }}
+    >
+      oA
+    </span>
+  );
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -34,43 +58,77 @@ export function Sidebar() {
         minWidth: width,
         height: '100vh',
         background: 'var(--color-surface-3)',
-        borderRight: '1px solid rgba(var(--ink-rgb),0.06)',
+        borderRight: '1px solid var(--color-border)',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'width 0.25s ease, min-width 0.25s ease',
-        overflow: 'hidden',
-        position: 'relative',
+        transition: 'width 0.2s ease, min-width 0.2s ease',
         flexShrink: 0,
+        position: 'relative',
       }}
     >
-      {/* Logo */}
+      {/* Logo + collapse toggle */}
       <div
         style={{
-          padding: collapsed ? '24px 0' : '24px 20px',
+          padding: collapsed ? '18px 0' : '18px 16px',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          justifyContent: collapsed ? 'center' : 'flex-start',
+          justifyContent: collapsed ? 'center' : 'space-between',
+          gap: 8,
+          minHeight: 64,
+          borderBottom: '1px solid var(--color-border-subtle)',
         }}
       >
-        <span
-          style={{
-            fontSize: '22px',
-            fontWeight: 800,
-            background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            letterSpacing: '-0.5px',
-            flexShrink: 0,
-          }}
-        >
-          {collapsed ? 'E' : 'openats'}
-        </span>
+        {collapsed ? (
+          <LogoMark size={32} />
+        ) : (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              fontSize: '17px',
+              fontWeight: 700,
+              color: 'var(--color-text-primary)',
+              letterSpacing: '-0.3px',
+            }}
+          >
+            <LogoMark size={26} />
+            openats
+          </span>
+        )}
+        {!collapsed && (
+          <button
+            aria-label="Collapse sidebar"
+            onClick={() => setCollapsed(true)}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              background: 'transparent',
+              border: '1px solid transparent',
+              color: 'var(--color-text-secondary)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'background 0.15s, border-color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(var(--ink-rgb),0.06)';
+              e.currentTarget.style.borderColor = 'var(--color-border)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.borderColor = 'transparent';
+            }}
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <nav style={{ flex: 1, padding: '10px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive =
@@ -80,71 +138,130 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? item.label : undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
-                padding: collapsed ? '10px 0' : '10px 12px',
+                gap: 10,
+                padding: collapsed ? '10px 0' : '9px 12px',
                 justifyContent: collapsed ? 'center' : 'flex-start',
-                borderRadius: '9px',
+                borderRadius: 7,
                 textDecoration: 'none',
-                color: isActive ? '#fff' : 'var(--color-muted)',
-                background: isActive ? 'rgba(var(--color-primary-rgb),0.15)' : 'transparent',
-                border: isActive
-                  ? '1px solid rgba(var(--color-primary-rgb),0.3)'
-                  : '1px solid transparent',
-                fontWeight: isActive ? 600 : 400,
-                fontSize: '14px',
-                transition: 'all 0.15s ease',
+                color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                background: isActive ? 'rgba(var(--ink-rgb),0.06)' : 'transparent',
+                fontWeight: isActive ? 600 : 500,
+                fontSize: 13.5,
+                transition: 'background 0.15s, color 0.15s',
                 whiteSpace: 'nowrap',
+                position: 'relative',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) e.currentTarget.style.background = 'rgba(var(--ink-rgb),0.035)';
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) e.currentTarget.style.background = 'transparent';
               }}
             >
-              <Icon size={18} style={{ flexShrink: 0, color: isActive ? 'var(--color-primary-light)' : undefined }} />
+              {isActive && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: collapsed ? 6 : 0,
+                    top: 8,
+                    bottom: 8,
+                    width: 2,
+                    borderRadius: 2,
+                    background: 'var(--color-primary)',
+                  }}
+                />
+              )}
+              <Icon
+                size={17}
+                strokeWidth={isActive ? 2.2 : 1.8}
+                style={{ flexShrink: 0, color: isActive ? 'var(--color-primary)' : 'currentColor' }}
+              />
               {!collapsed && <span>{item.label}</span>}
             </Link>
           );
         })}
+
+        {collapsed && (
+          <button
+            aria-label="Expand sidebar"
+            onClick={() => setCollapsed(false)}
+            style={{
+              marginTop: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '10px 0',
+              borderRadius: 7,
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(var(--ink-rgb),0.035)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            <PanelLeftOpen size={17} />
+          </button>
+        )}
       </nav>
 
       {/* Bottom user section */}
       {user && (
         <div
           style={{
-            padding: collapsed ? '16px 0' : '16px 14px',
-            borderTop: '1px solid rgba(var(--ink-rgb),0.06)',
+            padding: collapsed ? '14px 0' : '14px 14px',
+            borderTop: '1px solid var(--color-border-subtle)',
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: 10,
             justifyContent: collapsed ? 'center' : 'flex-start',
           }}
         >
           <div
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
+              width: 32,
+              height: 32,
+              borderRadius: 7,
+              background: 'rgba(var(--color-primary-rgb),0.12)',
+              color: 'var(--color-primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '13px',
+              fontSize: 13,
               fontWeight: 700,
-              color: '#fff',
               flexShrink: 0,
             }}
           >
             {user.fullName.charAt(0).toUpperCase()}
           </div>
           {!collapsed && (
-            <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+            <div style={{ overflow: 'hidden', minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--color-text-primary)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {user.fullName}
               </div>
               <p
                 style={{
                   margin: 0,
-                  fontSize: '11px',
-                  color: 'var(--color-muted)',
+                  fontSize: 11,
+                  color: 'var(--color-text-secondary)',
                   textTransform: 'capitalize',
                 }}
               >
@@ -154,30 +271,6 @@ export function Sidebar() {
           )}
         </div>
       )}
-
-      {/* Collapse toggle */}
-      <button
-        onClick={() => setCollapsed((c) => !c)}
-        style={{
-          position: 'absolute',
-          right: -12,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          width: 24,
-          height: 24,
-          borderRadius: '50%',
-          background: 'var(--color-border)',
-          border: '1px solid rgba(var(--ink-rgb),0.1)',
-          color: 'var(--color-muted)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 10,
-        }}
-      >
-        {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-      </button>
     </aside>
   );
 }

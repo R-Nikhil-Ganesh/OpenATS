@@ -33,6 +33,9 @@ export const config = {
     // Interactive candidate comparison is low-volume, so it can afford a
     // stronger model than the high-throughput scoring path above.
     compareModel: process.env.VLLM_COMPARE_MODEL || 'qwen2.5-coder:7b',
+    // MD→JSON profile extraction is a mechanical transformation, not a
+    // judgment call, so it runs on a smaller model than scoring/compare.
+    profileModel: process.env.VLLM_PROFILE_MODEL || 'qwen2.5-coder:1.5b',
     maxTokens: parseInt(process.env.VLLM_MAX_TOKENS || '800'),
     temperature: parseFloat(process.env.VLLM_TEMPERATURE || '0.2'),
     timeoutSeconds: parseFloat(process.env.VLLM_TIMEOUT_SECONDS || '90'),

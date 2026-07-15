@@ -128,13 +128,26 @@ export const jobsApi = {
             weaknesses: row.weaknesses || [],
             recommendation: row.recommendation || '',
             extracted_text: row.extracted_markdown || '',
-          }
+          },
+          profile: row.profile_json ?? undefined,
         }));
         return { ...res, data: { applications } };
       }),
 };
 
 // ─── Applications ─────────────────────────────────────────────────────────────
+export type ResumeProfile = {
+  name: string;
+  email: string;
+  phone: string;
+  location: string;
+  links: { linkedin: string; github: string; portfolio: string };
+  summary: string;
+  skills: string[];
+  experience: { title: string; company: string; duration: string; highlights: string[] }[];
+  education: { degree: string; institution: string; year: string }[];
+};
+
 export type Application = {
   id: string;
   job_id: string;
@@ -148,6 +161,7 @@ export type Application = {
   updated_at: string;
   candidate?: Candidate;
   ai_analysis?: AIAnalysis;
+  profile?: ResumeProfile;
 };
 
 export type AIAnalysis = {
@@ -203,6 +217,7 @@ export const applicationsApi = {
             recommendation: row.recommendation,
             extracted_text: row.extracted_markdown,
           },
+          profile: row.profile_json ?? undefined,
         };
         return { ...res, data: application };
       }),
@@ -246,6 +261,7 @@ export type CompareCandidate = {
   fullName: string;
   tier: 'A' | 'B' | 'C' | null;
   score: number | null;
+  profile?: ResumeProfile;
 };
 
 export type CompareResult = {
@@ -297,6 +313,7 @@ export type ModelSettings = {
   scoring_model: string;
   compare_model: string;
   chat_model: string;
+  profile_model: string;
 };
 
 export const settingsApi = {

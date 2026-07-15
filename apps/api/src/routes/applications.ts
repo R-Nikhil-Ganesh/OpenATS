@@ -49,9 +49,9 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
         `SELECT
            a.id, a.status, a.applied_at, a.updated_at,
            a.job_id, a.candidate_id, a.resume_id,
-           c.full_name, c.email, c.phone, c.linkedin_url, c.location,
+           c.full_name, c.email, c.phone, c.linkedin_url, c.github_url, c.location,
            r.original_filename AS file_name, r.storage_path, r.extracted_markdown,
-           r.file_size_bytes, r.mime_type,
+           r.file_size_bytes, r.mime_type, r.profile_json, r.profile_model, r.profiled_at,
            ae.id AS eval_id, ae.score, ae.tier,
            ae.matched_skills, ae.missing_requirements,
            ae.reasons->'strengths' AS strengths, ae.reasons->'weaknesses' AS weaknesses, ae.recommendation,

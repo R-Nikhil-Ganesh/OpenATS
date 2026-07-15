@@ -4,11 +4,12 @@ import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { jobsApi, applicationsApi, type Application } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { ProfileLinks } from '@/components/ui/ProfileLinks';
+import { CandidateProfileModal } from '@/components/candidates/CandidateProfileModal';
 import { formatScore, formatRelative } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
 
@@ -53,6 +54,7 @@ export function KanbanBoard({ jobId }: Props) {
   const queryClient = useQueryClient();
   const [board, setBoard] = useState<BoardState | null>(null);
   const [search, setSearch] = useState<Record<string, string>>({});
+  const [profileApp, setProfileApp] = useState<Application | null>(null);
 
   const { data: apps, isLoading } = useQuery({
     queryKey: ['job-applications-all', jobId],
@@ -258,12 +260,9 @@ export function KanbanBoard({ jobId }: Props) {
                                 cursor: 'grab',
                               }}
                             >
-                              <Link
-                                href={`/candidates/${app.id}`}
-                                style={{ textDecoration: 'none', display: 'block' }}
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <p
+                                  onClick={(e) => { e.stopPropagation(); setProfileApp(app); }}
                                   style={{
                                     margin: '0 0 4px',
                                     fontSize: '13px',
@@ -272,11 +271,16 @@ export function KanbanBoard({ jobId }: Props) {
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
+                                    minWidth: 0,
+                                    cursor: 'pointer',
                                   }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
                                 >
                                   {app.candidate?.full_name ?? 'Unknown'}
                                 </p>
-                              </Link>
+                                <ProfileLinks links={app.profile?.links} size={12} />
+                              </div>
                               <div
                                 style={{
                                   display: 'flex',
@@ -323,6 +327,15 @@ export function KanbanBoard({ jobId }: Props) {
           );
         })}
       </div>
+      <CandidateProfileModal
+        open={!!profileApp}
+        onClose={() => setProfileApp(null)}
+        name={profileApp?.candidate?.full_name ?? 'Unknown'}
+        profile={profileApp?.profile}
+        tier={profileApp?.tier}
+        score={profileApp?.score}
+        viewHref={profileApp ? `/candidates/${profileApp.id}` : undefined}
+      />
     </DragDropContext>
   );
 }

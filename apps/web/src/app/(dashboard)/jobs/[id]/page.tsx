@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, LayoutGrid, Pencil } from 'lucide-react';
+import { Upload, LayoutGrid, Pencil, Building2, MapPin, CalendarDays } from 'lucide-react';
 import { jobsApi } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -81,18 +81,15 @@ export default function JobDetailPage() {
             </h1>
             <Badge status={job.status} />
           </div>
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>🏢 {job.department}</span>
-            {job.location && (
-              <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>📍 {job.location}</span>
-            )}
-            <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>
-              🗓 Created {formatDate(job.created_at)}
-            </span>
+          <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <MetaItem icon={<Building2 size={13} />} label={job.department} />
+            {job.location && <MetaItem icon={<MapPin size={13} />} label={job.location} />}
+            <MetaItem icon={<CalendarDays size={13} />} label={`Created ${formatDate(job.created_at)}`} />
             {(job.experience_years_min !== undefined && job.experience_years_max !== undefined) && (
-              <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted)' }}>
-                <span style={{ color: 'var(--color-text-strong)' }}>Experience:</span> {job.experience_years_min}-{job.experience_years_max} yrs
-              </p>
+              <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>
+                <span style={{ color: 'var(--color-text-strong)', fontWeight: 500 }}>Experience:</span>{' '}
+                {job.experience_years_min}–{job.experience_years_max} yrs
+              </span>
             )}
           </div>
         </div>
@@ -164,7 +161,7 @@ export default function JobDetailPage() {
               style={{
                 height: '100%',
                 width: `${donePercent}%`,
-                background: 'linear-gradient(90deg, var(--color-primary), var(--color-success))',
+                background: 'var(--color-primary)',
                 borderRadius: 10,
                 transition: 'width 0.5s ease',
               }}
@@ -184,5 +181,22 @@ export default function JobDetailPage() {
         <ApplicationsTable jobId={id} />
       </div>
     </div>
+  );
+}
+
+function MetaItem({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 13,
+        color: 'var(--color-muted)',
+      }}
+    >
+      <span style={{ display: 'inline-flex', color: 'var(--color-text-secondary)' }}>{icon}</span>
+      {label}
+    </span>
   );
 }

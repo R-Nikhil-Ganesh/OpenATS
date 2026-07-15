@@ -19,6 +19,7 @@ from db import (
 from embedder import embed_text, get_model
 from extractor import extract_pdf_to_markdown
 from normalizer import normalize_resume
+from profiler import build_profile
 from scorer import score_resume
 
 # ---------------------------------------------------------------------------
@@ -205,6 +206,57 @@ async def process_resume(job: Job, job_token: str) -> dict:
         proc_job_id, status="extracted", progress=50
     )
     await job.updateProgress(50)
+
+    # ── Step 2.5: Build structured profile (JD-independent) ─────────────────
+    # Best-effort like embedding below: a profile is supplementary metadata,
+    # not required for scoring, so a failure here shouldn't fail the job.
+    try:
+        profile_model = await get_setting("profile_model", config.vllm_profile_model)
+        profile, _raw_profile = await build_profile(
+            normalized.raw_text, model_name=profile_model
+        )
+
+        async with TransactionDB() as conn:
+            await conn.execute(
+                """
+                UPDATE resumes
+                SET profile_json  = $1,
+                    profile_model = $2,
+                    profiled_at   = now(),
+                    updated_at    = now()
+                WHERE id = $3
+                """,
+                profile.model_dump_json(),
+                profile_model,
+                resume_id,
+            )
+
+            if profile.email or profile.name or profile.links.linkedin or profile.links.github:
+                await conn.execute(
+                    """
+                    UPDATE candidates
+                    SET full_name    = COALESCE(full_name, $1),
+                        email        = COALESCE(email, NULLIF($2, '')),
+                        phone        = COALESCE(phone, NULLIF($3, '')),
+                        linkedin_url = COALESCE(linkedin_url, NULLIF($4, '')),
+                        github_url   = COALESCE(github_url, NULLIF($5, '')),
+                        location     = COALESCE(location, NULLIF($6, '')),
+                        updated_at   = now()
+                    WHERE id = (
+                        SELECT candidate_id FROM applications WHERE id = $7
+                    )
+                    """,
+                    profile.name or None,
+                    profile.email,
+                    profile.phone,
+                    profile.links.linkedin,
+                    profile.links.github,
+                    profile.location,
+                    application_id,
+                )
+        logger.info("Profile built for resume %s (model=%s)", resume_id, profile_model)
+    except Exception as exc:
+        logger.warning("Profile step failed (non-fatal): %s", exc)
 
     # ── Step 3: Embedding ────────────────────────────────────────────────────
     try:

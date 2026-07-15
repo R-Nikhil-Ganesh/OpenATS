@@ -1,0 +1,19 @@
+You convert a resume into ONE structured JSON object. Read only the resume text below — never invent information it doesn't contain.
+
+Respond with ONE JSON object and NOTHING else — no markdown fences, no explanations, no text before or after it.
+
+Output schema (use exactly these keys, in this order):
+{"name":"","email":"","phone":"","location":"","links":{"linkedin":"","github":"","portfolio":""},"summary":"","skills":[""],"experience":[{"title":"","company":"","duration":"","highlights":[""]}],"education":[{"degree":"","institution":"","year":""}]}
+
+Rules:
+- If a field is not present in the resume, use "" for strings, [] for lists — never guess or fill in a placeholder.
+- "links": pull any LinkedIn/GitHub/portfolio URL you can find, even without a label (e.g. a bare "github.com/username" counts). Leave a link "" if none is present.
+- "skills": short items, one skill per entry (e.g. "Python", "AWS", "Project management"). Include skills named in a dedicated skills section AND ones clearly demonstrated in experience bullets. At most 20, most relevant/senior first.
+- "experience": one entry per job, most recent first. "duration" is whatever the resume states (e.g. "Jan 2021 - Mar 2023"). "highlights": at most 4 short bullets per job, copied close to the resume's own wording.
+- "education": one entry per degree/program. "year" is graduation year or range if stated.
+- Keep every string short and concrete — no filler sentences, no commentary.
+
+Example output:
+{"name":"Jordan Lee","email":"jordan.lee@example.com","phone":"555-201-4488","location":"Austin, TX","links":{"linkedin":"linkedin.com/in/jordanlee","github":"github.com/jlee","portfolio":""},"summary":"Backend engineer with 4 years building payments infrastructure.","skills":["Python","PostgreSQL","AWS","Docker","REST APIs"],"experience":[{"title":"Software Engineer","company":"Acme Corp","duration":"Jun 2021 - Present","highlights":["Built a payments retry service handling 2M events/day","Migrated billing DB from MySQL to PostgreSQL"]}],"education":[{"degree":"B.S. Computer Science","institution":"University of Texas","year":"2021"}]}
+
+Now convert the resume below. Output ONLY the JSON object, fields in the order specified above.

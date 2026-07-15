@@ -8,6 +8,8 @@ import { jobsApi, type Application } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ProfileLinks } from '@/components/ui/ProfileLinks';
+import { CandidateProfileModal } from '@/components/candidates/CandidateProfileModal';
 import { formatScore, formatRelative } from '@/lib/utils';
 
 type SortKey = 'name' | 'tier' | 'score' | 'status' | 'applied_at';
@@ -29,6 +31,8 @@ export function ApplicationsTable({ jobId }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   // Application ids selected for head-to-head comparison (max 2).
   const [selected, setSelected] = useState<string[]>([]);
+  // Application whose profile is currently open in the quick-view modal.
+  const [profileApp, setProfileApp] = useState<Application | null>(null);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -65,7 +69,8 @@ export function ApplicationsTable({ jobId }: Props) {
         const name = a.candidate?.full_name?.toLowerCase() ?? '';
         const email = a.candidate?.email?.toLowerCase() ?? '';
         const skills = a.ai_analysis?.matched_skills?.map((s: { skill: string }) => s.skill.toLowerCase()).join(' ') ?? '';
-        return name.includes(q) || email.includes(q) || skills.includes(q);
+        const profileSkills = a.profile?.skills?.join(' ').toLowerCase() ?? '';
+        return name.includes(q) || email.includes(q) || skills.includes(q) || profileSkills.includes(q);
       });
     }
 
@@ -245,10 +250,18 @@ export function ApplicationsTable({ jobId }: Props) {
                       />
                     </td>
                     <td style={{ padding: '12px 14px', minWidth: 0 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
-                          {app.candidate?.full_name ?? 'Unknown'}
-                        </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span
+                            onClick={(e) => { e.stopPropagation(); setProfileApp(app); }}
+                            style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220, cursor: 'pointer' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+                          >
+                            {app.candidate?.full_name ?? 'Unknown'}
+                          </span>
+                          <ProfileLinks links={app.profile?.links} size={12} />
+                        </div>
                         <span style={{ fontSize: '11px', color: 'var(--color-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
                           {app.candidate?.email}
                         </span>
@@ -338,6 +351,16 @@ export function ApplicationsTable({ jobId }: Props) {
           </button>
         </div>
       )}
+
+      <CandidateProfileModal
+        open={!!profileApp}
+        onClose={() => setProfileApp(null)}
+        name={profileApp?.candidate?.full_name ?? 'Unknown'}
+        profile={profileApp?.profile}
+        tier={profileApp?.tier}
+        score={profileApp?.score}
+        viewHref={profileApp ? `/candidates/${profileApp.id}` : undefined}
+      />
     </div>
   );
 }

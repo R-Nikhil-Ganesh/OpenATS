@@ -12,6 +12,7 @@ import {
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { CandidateProfileModal } from '@/components/candidates/CandidateProfileModal';
 import { tierColor, formatScore } from '@/lib/utils';
 
 type Props = {
@@ -20,7 +21,17 @@ type Props = {
 
 type Side = 'a' | 'b';
 
-function CandidateHeader({ candidate, side, isWinner }: { candidate: CompareCandidate; side: Side; isWinner: boolean }) {
+function CandidateHeader({
+  candidate,
+  side,
+  isWinner,
+  onOpenProfile,
+}: {
+  candidate: CompareCandidate;
+  side: Side;
+  isWinner: boolean;
+  onOpenProfile: () => void;
+}) {
   const color = tierColor(candidate.tier);
   return (
     <div
@@ -76,6 +87,7 @@ function CandidateHeader({ candidate, side, isWinner }: { candidate: CompareCand
           )}
         </div>
         <p
+          onClick={onOpenProfile}
           style={{
             margin: '0 0 4px',
             fontSize: '16px',
@@ -84,7 +96,10 @@ function CandidateHeader({ candidate, side, isWinner }: { candidate: CompareCand
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            cursor: 'pointer',
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
         >
           {candidate.fullName}
         </p>
@@ -177,7 +192,7 @@ function ChatPanel({ applicationIds, names }: { applicationIds: [string, string]
     onError: () => {
       setMessages((m) => [
         ...m,
-        { role: 'assistant', content: '⚠️ Sorry — I couldn\'t answer that just now. Please try again.' },
+        { role: 'assistant', content: "Sorry — I couldn't answer that just now. Please try again." },
       ]);
     },
   });
@@ -308,6 +323,7 @@ function ChatPanel({ applicationIds, names }: { applicationIds: [string, string]
 }
 
 export function CompareView({ applicationIds }: Props) {
+  const [profileSide, setProfileSide] = useState<Side | null>(null);
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['compare', ...applicationIds],
     queryFn: () => compareApi.compare(applicationIds).then((r) => r.data),
@@ -356,8 +372,8 @@ export function CompareView({ applicationIds }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Candidate headers */}
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <CandidateHeader candidate={candidates.a} side="a" isWinner={comparison.winner === 'a'} />
-        <CandidateHeader candidate={candidates.b} side="b" isWinner={comparison.winner === 'b'} />
+        <CandidateHeader candidate={candidates.a} side="a" isWinner={comparison.winner === 'a'} onOpenProfile={() => setProfileSide('a')} />
+        <CandidateHeader candidate={candidates.b} side="b" isWinner={comparison.winner === 'b'} onOpenProfile={() => setProfileSide('b')} />
       </div>
 
       {/* Verdict */}
@@ -423,6 +439,16 @@ export function CompareView({ applicationIds }: Props) {
           <ChatPanel applicationIds={applicationIds} names={names} />
         </div>
       </div>
+
+      <CandidateProfileModal
+        open={profileSide !== null}
+        onClose={() => setProfileSide(null)}
+        name={profileSide ? candidates[profileSide].fullName : ''}
+        profile={profileSide ? candidates[profileSide].profile : undefined}
+        tier={profileSide ? candidates[profileSide].tier : undefined}
+        score={profileSide ? candidates[profileSide].score : undefined}
+        viewHref={profileSide ? `/candidates/${candidates[profileSide].applicationId}` : undefined}
+      />
     </div>
   );
 }

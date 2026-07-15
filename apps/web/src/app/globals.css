@@ -179,6 +179,14 @@ body {
   75%, 100% { transform: scale(2); opacity: 0; }
 }
 
+/* ─── Spinning loader (slow) ────────────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin-slow {
+  animation: spin 1.4s linear infinite;
+}
+
 /* ─── Gradient Text Utility ─────────────────────────────────────────────────── */
 .gradient-text {
   background: var(--color-primary-gradient);

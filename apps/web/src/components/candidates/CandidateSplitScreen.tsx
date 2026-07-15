@@ -18,11 +18,13 @@ import { getAccessToken } from '@/lib/auth';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { ProfileLinks } from '@/components/ui/ProfileLinks';
+import { ProfileDetails } from './ProfileDetails';
 import { formatScore, tierColor, formatDate } from '@/lib/utils';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-type Tab = 'analysis' | 'text' | 'history';
+type Tab = 'profile' | 'analysis' | 'text' | 'history';
 
 type Props = {
   applicationId: string;
@@ -380,6 +382,7 @@ export function CandidateSplitScreen({ applicationId }: Props) {
     : undefined;
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: 'profile', label: 'Profile' },
     { id: 'analysis', label: 'AI Analysis' },
     { id: 'text', label: 'Extracted Text' },
     { id: 'history', label: 'History' },
@@ -519,9 +522,12 @@ export function CandidateSplitScreen({ applicationId }: Props) {
               {candidate?.email}
               {candidate?.phone && ` · ${candidate.phone}`}
             </p>
-            <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-              Score: {formatScore(app.score)}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                Score: {formatScore(app.score)}
+              </span>
+              <ProfileLinks links={app.profile?.links} size={13} />
+            </div>
           </div>
         </div>
 
@@ -565,6 +571,7 @@ export function CandidateSplitScreen({ applicationId }: Props) {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
+              {tab === 'profile' && <ProfileDetails profile={app.profile} />}
               {tab === 'analysis' && <AnalysisTab app={app} />}
               {tab === 'text' && (
                 <pre

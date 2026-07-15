@@ -35,6 +35,13 @@ class Config:
     # and blew past any reasonable timeout under load.
     vllm_max_concurrent_requests: int = int(os.getenv('VLLM_MAX_CONCURRENT_REQUESTS', '4'))
 
+    # Profile extraction (JD-independent MD→JSON step) runs on a smaller model
+    # than scoring — it's a mechanical transformation, not a judgment call.
+    vllm_profile_model: str = os.getenv('VLLM_PROFILE_MODEL', 'qwen2.5-coder:1.5b')
+    # Profiles include experience/education lists, so allow more headroom than
+    # the trimmed scoring schema.
+    vllm_profile_max_tokens: int = int(os.getenv('VLLM_PROFILE_MAX_TOKENS', '1200'))
+
     # Embeddings
     embedding_model: str = os.getenv('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
     embedding_dim: int = int(os.getenv('EMBEDDING_DIM', '384'))

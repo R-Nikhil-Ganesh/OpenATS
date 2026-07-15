@@ -44,6 +44,7 @@ type LoadedCandidate = {
   weaknesses: string[];
   recommendation: string | null;
   resumeText: string;
+  profile: unknown;
 };
 
 type CompareContext = {
@@ -74,6 +75,7 @@ async function loadContext(ids: string[]): Promise<CompareContext | { error: str
          jr.raw_jd,
          c.full_name,
          r.extracted_markdown,
+         r.profile_json,
          ae.tier, ae.score, ae.recommendation,
          ae.reasons->'strengths' AS strengths,
          ae.reasons->'weaknesses' AS weaknesses
@@ -110,6 +112,7 @@ async function loadContext(ids: string[]): Promise<CompareContext | { error: str
       weaknesses: Array.isArray(row.weaknesses) ? row.weaknesses : [],
       recommendation: row.recommendation ?? null,
       resumeText: (row.extracted_markdown ?? '').slice(0, RESUME_CHARS),
+      profile: row.profile_json ?? null,
     });
 
     // Preserve the caller's ordering (a = ids[0], b = ids[1]).
@@ -259,8 +262,8 @@ router.post(
 
       res.json({
         candidates: {
-          a: { applicationId: ctx.a.applicationId, fullName: ctx.a.fullName, tier: ctx.a.tier, score: ctx.a.score },
-          b: { applicationId: ctx.b.applicationId, fullName: ctx.b.fullName, tier: ctx.b.tier, score: ctx.b.score },
+          a: { applicationId: ctx.a.applicationId, fullName: ctx.a.fullName, tier: ctx.a.tier, score: ctx.a.score, profile: ctx.a.profile },
+          b: { applicationId: ctx.b.applicationId, fullName: ctx.b.fullName, tier: ctx.b.tier, score: ctx.b.score, profile: ctx.b.profile },
         },
         comparison: result,
       });
