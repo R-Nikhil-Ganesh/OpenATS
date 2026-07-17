@@ -1,10 +1,36 @@
+import crypto from 'crypto';
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { withTransaction } from '../db/pool';
+import { redis } from '../db/redis';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { chatCompletion, chatCompletionJson, type ChatMessage } from '../services/llm';
 import { getModel } from '../services/settings';
+
+// Cached comparisons are self-invalidating (see fingerprint below), so a long
+// TTL is just a safety net against unbounded growth, not a correctness knob.
+const COMPARE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+function compareCacheKey(idA: string, idB: string, model: string): string {
+  return `compare:${idA}:${idB}:${model}`;
+}
+
+/**
+ * Fingerprints everything that could change a comparison's outcome: each
+ * candidate's current resume + latest scoring evaluation, the job's most
+ * recent edit, and which model produced the comparison. If any of these
+ * differ from what's cached, the cache is treated as stale.
+ */
+function compareFingerprint(ctx: CompareContext, model: string): string {
+  const payload = JSON.stringify({
+    model,
+    jobUpdatedAt: ctx.jobUpdatedAt,
+    a: [ctx.a.resumeId, ctx.a.evalId],
+    b: [ctx.b.resumeId, ctx.b.evalId],
+  });
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
 
 const router = Router();
 router.use(authenticate);
@@ -37,6 +63,8 @@ const askSchema = z.object({
 
 type LoadedCandidate = {
   applicationId: string;
+  resumeId: string;
+  evalId: string | null;
   fullName: string;
   tier: string | null;
   score: number | null;
@@ -50,6 +78,7 @@ type LoadedCandidate = {
 type CompareContext = {
   jobTitle: string;
   jobDescription: string;
+  jobUpdatedAt: string;
   a: LoadedCandidate;
   b: LoadedCandidate;
 };
@@ -71,11 +100,14 @@ async function loadContext(ids: string[]): Promise<CompareContext | { error: str
       `SELECT
          a.id AS application_id,
          a.job_id,
+         a.resume_id,
          jr.title AS job_title,
          jr.raw_jd,
+         jr.updated_at AS job_updated_at,
          c.full_name,
          r.extracted_markdown,
          r.profile_json,
+         ae.id AS eval_id,
          ae.tier, ae.score, ae.recommendation,
          ae.reasons->'strengths' AS strengths,
          ae.reasons->'weaknesses' AS weaknesses
@@ -84,7 +116,7 @@ async function loadContext(ids: string[]): Promise<CompareContext | { error: str
        JOIN candidates c ON c.id = a.candidate_id
        JOIN resumes r ON r.id = a.resume_id
        LEFT JOIN LATERAL (
-         SELECT tier, score, recommendation, reasons
+         SELECT id, tier, score, recommendation, reasons
          FROM application_ai_evaluations
          WHERE application_id = a.id
          ORDER BY created_at DESC LIMIT 1
@@ -105,6 +137,8 @@ async function loadContext(ids: string[]): Promise<CompareContext | { error: str
 
     const toCandidate = (row: (typeof rows)[number]): LoadedCandidate => ({
       applicationId: row.application_id,
+      resumeId: row.resume_id,
+      evalId: row.eval_id ?? null,
       fullName: row.full_name ?? 'Unknown',
       tier: row.tier ?? null,
       score: row.score !== null && row.score !== undefined ? Number(row.score) : null,
@@ -126,6 +160,7 @@ async function loadContext(ids: string[]): Promise<CompareContext | { error: str
     return {
       jobTitle: rowA.job_title ?? '',
       jobDescription: (rowA.raw_jd ?? '').slice(0, JD_CHARS),
+      jobUpdatedAt: rowA.job_updated_at ? new Date(rowA.job_updated_at).toISOString() : '',
       a: toCandidate(rowA),
       b: toCandidate(rowB),
     };
@@ -244,6 +279,19 @@ router.post(
         return;
       }
 
+      const model = await getModel('compare_model');
+      const fingerprint = compareFingerprint(ctx, model);
+      const cacheKey = compareCacheKey(ids[0], ids[1], model);
+
+      const cachedRaw = await redis.get(cacheKey);
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw) as { fingerprint: string; candidates: unknown; comparison: unknown };
+        if (cached.fingerprint === fingerprint) {
+          res.json({ candidates: cached.candidates, comparison: cached.comparison, cached: true });
+          return;
+        }
+      }
+
       const messages: ChatMessage[] = [
         { role: 'system', content: COMPARE_SYSTEM },
         {
@@ -254,19 +302,24 @@ router.post(
 
       // Small models sometimes return a malformed shape that still parses as
       // JSON; retry once if the first result isn't usable before giving up.
-      const model = await getModel('compare_model');
       let result = normalizeComparison(await chatCompletionJson(messages, { model }));
       if (!isUsable(result)) {
         result = normalizeComparison(await chatCompletionJson(messages, { model, temperature: 0.1 }));
       }
 
-      res.json({
-        candidates: {
-          a: { applicationId: ctx.a.applicationId, fullName: ctx.a.fullName, tier: ctx.a.tier, score: ctx.a.score, profile: ctx.a.profile },
-          b: { applicationId: ctx.b.applicationId, fullName: ctx.b.fullName, tier: ctx.b.tier, score: ctx.b.score, profile: ctx.b.profile },
-        },
-        comparison: result,
-      });
+      const candidates = {
+        a: { applicationId: ctx.a.applicationId, fullName: ctx.a.fullName, tier: ctx.a.tier, score: ctx.a.score, profile: ctx.a.profile },
+        b: { applicationId: ctx.b.applicationId, fullName: ctx.b.fullName, tier: ctx.b.tier, score: ctx.b.score, profile: ctx.b.profile },
+      };
+
+      await redis.set(
+        cacheKey,
+        JSON.stringify({ fingerprint, candidates, comparison: result }),
+        'EX',
+        COMPARE_CACHE_TTL_SECONDS
+      );
+
+      res.json({ candidates, comparison: result, cached: false });
     } catch (err) {
       next(err);
     }

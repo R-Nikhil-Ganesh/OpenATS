@@ -156,7 +156,14 @@ export function ModelSettingsCard() {
                       style={inputStyle(canEdit)}
                     >
                       {options.map((opt) => (
-                        <option key={opt} value={opt}>
+                        <option
+                          key={opt}
+                          value={opt}
+                          style={{
+                            background: 'var(--color-surface)',
+                            color: 'var(--color-text-primary)',
+                          }}
+                        >
                           {opt}
                         </option>
                       ))}
@@ -206,12 +213,20 @@ function inputStyle(enabled: boolean): React.CSSProperties {
     boxSizing: 'border-box',
     padding: '9px 12px',
     fontSize: '13px',
-    color: 'var(--color-text-strong)',
-    background: enabled ? 'rgba(var(--ink-rgb),0.03)' : 'rgba(var(--ink-rgb),0.02)',
-    border: '1px solid rgba(var(--ink-rgb),0.1)',
+    color: 'var(--color-text-primary)',
+    background: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
     borderRadius: '9px',
     outline: 'none',
     cursor: enabled ? 'pointer' : 'not-allowed',
     opacity: enabled ? 1 : 0.7,
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    backgroundImage:
+      "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgb(148,163,184)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\")",
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 10px center',
+    paddingRight: 32,
   };
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -13,6 +14,7 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { applicationsApi, type StatusHistoryEntry, type CandidateConflictData } from '@/lib/api';
 import { getAccessToken } from '@/lib/auth';
@@ -392,6 +394,7 @@ function ConflictBanner({
 }
 
 export function CandidateSplitScreen({ applicationId }: Props) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('analysis');
   const [numPages, setNumPages] = useState<number>(1);
@@ -400,6 +403,7 @@ export function CandidateSplitScreen({ applicationId }: Props) {
   const { data: app, isLoading } = useQuery({
     queryKey: ['application', applicationId],
     queryFn: () => applicationsApi.get(applicationId).then((r) => r.data),
+    refetchInterval: (query) => (query.state.data?.profile_status === 'pending' ? 3000 : false),
   });
 
   const { data: historyData } = useQuery({
@@ -421,6 +425,18 @@ export function CandidateSplitScreen({ applicationId }: Props) {
   const reprocessMutation = useMutation({
     mutationFn: () => applicationsApi.reprocess(applicationId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['application', applicationId] }),
+  });
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => applicationsApi.delete(applicationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['job-applications-all'] });
+      queryClient.invalidateQueries({ queryKey: ['job-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      router.push(app?.job_id ? `/jobs/${app.job_id}/board` : '/jobs');
+    },
   });
 
   const [confirmAction, setConfirmAction] = useState<'override' | 'discard' | null>(null);
@@ -646,7 +662,13 @@ export function CandidateSplitScreen({ applicationId }: Props) {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
             >
-              {tab === 'profile' && <ProfileDetails profile={app.profile} />}
+              {tab === 'profile' && app.profile_status === 'pending' && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '60px 0', color: 'var(--color-muted)' }}>
+                  <Spinner size="md" />
+                  <span style={{ fontSize: '13px' }}>Generating profile…</span>
+                </div>
+              )}
+              {tab === 'profile' && app.profile_status !== 'pending' && <ProfileDetails profile={app.profile} />}
               {tab === 'analysis' && <AnalysisTab app={app} />}
               {tab === 'text' && (
                 <pre
@@ -714,8 +736,41 @@ export function CandidateSplitScreen({ applicationId }: Props) {
             <RefreshCw size={14} />
             Reprocess
           </Button>
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={() => setDeleteConfirmOpen(true)}
+          >
+            <Trash2 size={14} />
+            Delete
+          </Button>
         </div>
       </div>
+
+      <Modal
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title="Delete this application?"
+        width="440px"
+      >
+        <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--color-text-body)', lineHeight: 1.6 }}>
+          This permanently removes {app.candidate?.full_name ?? 'this candidate'}&rsquo;s application, AI
+          evaluation, and resume file from disk. This can&rsquo;t be undone.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <Button variant="ghost" size="md" onClick={() => setDeleteConfirmOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            size="md"
+            loading={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate()}
+          >
+            Delete
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={confirmAction !== null}

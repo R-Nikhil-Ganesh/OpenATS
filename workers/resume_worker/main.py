@@ -122,6 +122,83 @@ async def _pause_for_candidate_conflict(
     await record_candidate_conflict(application_id, proc_job_id, conflict_payload)
 
 
+async def _process_profile_only(application_id: str, resume_id: str, keep_separate: bool) -> dict:
+    """
+    Lightweight on-demand path: (re-)generate a resume's structured profile
+    without touching extraction/embedding/scoring. Triggered by the API when
+    a candidate detail page is opened and no profile exists yet — profiling
+    is JD-independent and scoring never reads it, so it doesn't need to run
+    on the critical path of every upload.
+    """
+    async with TransactionDB() as conn:
+        resume_row = await conn.fetchrow(
+            "SELECT extracted_markdown FROM resumes WHERE id = $1", resume_id
+        )
+    if not resume_row or not resume_row["extracted_markdown"]:
+        logger.warning("Profile-only job for resume %s: no extracted_markdown yet", resume_id)
+        return {"status": "no_markdown"}
+
+    normalized = normalize_resume(resume_row["extracted_markdown"])
+
+    profile_model = await get_setting("profile_model", config.vllm_profile_model)
+    profile, _raw_profile = await build_profile(normalized.raw_text, model_name=profile_model)
+
+    async with TransactionDB() as conn:
+        await conn.execute(
+            """
+            UPDATE resumes
+            SET profile_json  = $1,
+                profile_model = $2,
+                profiled_at   = now(),
+                updated_at    = now()
+            WHERE id = $3
+            """,
+            profile.model_dump_json(),
+            profile_model,
+            resume_id,
+        )
+
+    merge_profile_email = None if keep_separate else profile.email
+    if merge_profile_email or profile.name or profile.links.linkedin or profile.links.github:
+        try:
+            async with TransactionDB() as conn:
+                await conn.execute(
+                    """
+                    UPDATE candidates
+                    SET full_name    = COALESCE(full_name, $1),
+                        email        = COALESCE(email, NULLIF($2, '')),
+                        phone        = COALESCE(phone, NULLIF($3, '')),
+                        linkedin_url = COALESCE(linkedin_url, NULLIF($4, '')),
+                        github_url   = COALESCE(github_url, NULLIF($5, '')),
+                        location     = COALESCE(location, NULLIF($6, '')),
+                        updated_at   = now()
+                    WHERE id = (
+                        SELECT candidate_id FROM applications WHERE id = $7
+                    )
+                    """,
+                    profile.name or None,
+                    merge_profile_email,
+                    profile.phone,
+                    profile.links.linkedin,
+                    profile.links.github,
+                    profile.location,
+                    application_id,
+                )
+        except asyncpg.exceptions.UniqueViolationError:
+            # Unlike the upload-time merge (Step 2), this can run long after
+            # the application has already progressed past review — silently
+            # skip the enrichment merge rather than pausing an in-progress
+            # application over a background contact-info fetch.
+            logger.warning(
+                "Profile-only job for app %s: candidate email merge skipped "
+                "(conflicts with an existing candidate)",
+                application_id,
+            )
+
+    logger.info("Profile built on-demand for resume %s (model=%s)", resume_id, profile_model)
+    return {"status": "profiled"}
+
+
 # ---------------------------------------------------------------------------
 # Main processing pipeline
 # ---------------------------------------------------------------------------
@@ -141,12 +218,28 @@ async def process_resume(job: Job, job_token: str) -> dict:
                                 # candidate distinct after a prior email
                                 # conflict; skip re-merging the email so we
                                 # don't immediately hit the same conflict.
+        "profileOnly":   bool,  # optional — skip straight to the on-demand
+                                # profile-generation path (see
+                                # _process_profile_only); requires "resumeId"
+                                # instead of "resumePath"/"jobId".
+        "resumeId":      str,   # required when profileOnly is set
     }
     """
     data: dict = job.data
     application_id: str = data["applicationId"]
-    resume_path: str = data["resumePath"]
     keep_separate: bool = bool(data.get("keepSeparate"))
+
+    if data.get("profileOnly"):
+        resume_id: str = data["resumeId"]
+        logger.info(
+            "▶  Profile-only job %s | app=%s | resume=%s",
+            job.id,
+            application_id,
+            resume_id,
+        )
+        return await _process_profile_only(application_id, resume_id, keep_separate)
+
+    resume_path: str = data["resumePath"]
 
     logger.info(
         "▶  Job %s | app=%s | path=%s",
@@ -272,69 +365,10 @@ async def process_resume(job: Job, job_token: str) -> dict:
     )
     await job.updateProgress(50)
 
-    # ── Step 2.5: Build structured profile (JD-independent) ─────────────────
-    # Best-effort like embedding below: a profile is supplementary metadata,
-    # not required for scoring, so a failure here shouldn't fail the job.
-    try:
-        profile_model = await get_setting("profile_model", config.vllm_profile_model)
-        profile, _raw_profile = await build_profile(
-            normalized.raw_text, model_name=profile_model
-        )
-
-        async with TransactionDB() as conn:
-            await conn.execute(
-                """
-                UPDATE resumes
-                SET profile_json  = $1,
-                    profile_model = $2,
-                    profiled_at   = now(),
-                    updated_at    = now()
-                WHERE id = $3
-                """,
-                profile.model_dump_json(),
-                profile_model,
-                resume_id,
-            )
-
-        merge_profile_email = None if keep_separate else profile.email
-        if merge_profile_email or profile.name or profile.links.linkedin or profile.links.github:
-            try:
-                async with TransactionDB() as conn:
-                    await conn.execute(
-                        """
-                        UPDATE candidates
-                        SET full_name    = COALESCE(full_name, $1),
-                            email        = COALESCE(email, NULLIF($2, '')),
-                            phone        = COALESCE(phone, NULLIF($3, '')),
-                            linkedin_url = COALESCE(linkedin_url, NULLIF($4, '')),
-                            github_url   = COALESCE(github_url, NULLIF($5, '')),
-                            location     = COALESCE(location, NULLIF($6, '')),
-                            updated_at   = now()
-                        WHERE id = (
-                            SELECT candidate_id FROM applications WHERE id = $7
-                        )
-                        """,
-                        profile.name or None,
-                        merge_profile_email,
-                        profile.phone,
-                        profile.links.linkedin,
-                        profile.links.github,
-                        profile.location,
-                        application_id,
-                    )
-            except asyncpg.exceptions.UniqueViolationError:
-                await _pause_for_candidate_conflict(
-                    application_id=application_id,
-                    proc_job_id=proc_job_id,
-                    job_id=data["jobId"],
-                    extracted_email=profile.email,
-                    extracted_name=profile.name,
-                    step="profile",
-                )
-                return {"status": "duplicate_candidate"}
-        logger.info("Profile built for resume %s (model=%s)", resume_id, profile_model)
-    except Exception as exc:
-        logger.warning("Profile step failed (non-fatal): %s", exc)
+    # Step 2.5 (structured profile extraction) is no longer run automatically
+    # here — it's JD-independent and scoring never reads it (see
+    # _process_profile_only), so it's generated lazily on first view of the
+    # candidate detail page instead of on every upload's critical path.
 
     # ── Step 3: Embedding ────────────────────────────────────────────────────
     try:

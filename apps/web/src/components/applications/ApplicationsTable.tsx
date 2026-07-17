@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, Users, GitCompareArrows, X } from 'lucide-react';
-import { jobsApi, type Application } from '@/lib/api';
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Users, GitCompareArrows, X, Trash2 } from 'lucide-react';
+import { jobsApi, applicationsApi, type Application } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProfileLinks } from '@/components/ui/ProfileLinks';
@@ -25,6 +27,7 @@ const TIER_RANK: Record<string, number> = { A: 3, B: 2, C: 1 };
 
 export function ApplicationsTable({ jobId }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [tierFilter, setTierFilter] = useState<'all' | 'A' | 'B' | 'C'>('all');
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('score');
@@ -33,6 +36,18 @@ export function ApplicationsTable({ jobId }: Props) {
   const [selected, setSelected] = useState<string[]>([]);
   // Application whose profile is currently open in the quick-view modal.
   const [profileApp, setProfileApp] = useState<Application | null>(null);
+  // Application pending delete confirmation.
+  const [deleteTarget, setDeleteTarget] = useState<Application | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => applicationsApi.delete(id),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['job-applications-all', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['job-stats', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    },
+  });
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -211,6 +226,7 @@ export function ApplicationsTable({ jobId }: Props) {
                   <SortHeader label="Score" sortableKey="score" />
                   <SortHeader label="Status" sortableKey="status" />
                   <SortHeader label="Applied" sortableKey="applied_at" />
+                  <th style={{ width: 40 }} />
                 </tr>
               </thead>
               <tbody>
@@ -278,6 +294,26 @@ export function ApplicationsTable({ jobId }: Props) {
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
                       {formatRelative(app.created_at)}
+                    </td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(app); }}
+                        title="Delete application"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-muted)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-danger)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </td>
                   </tr>
                   );
@@ -361,6 +397,31 @@ export function ApplicationsTable({ jobId }: Props) {
         score={profileApp?.score}
         viewHref={profileApp ? `/candidates/${profileApp.id}` : undefined}
       />
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete this application?"
+        width="440px"
+      >
+        <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--color-text-body)', lineHeight: 1.6 }}>
+          This permanently removes {deleteTarget?.candidate?.full_name ?? 'this candidate'}&rsquo;s
+          application, AI evaluation, and resume file from disk. This can&rsquo;t be undone.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <Button variant="ghost" size="md" onClick={() => setDeleteTarget(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            size="md"
+            loading={deleteMutation.isPending}
+            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+          >
+            Delete
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

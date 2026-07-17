@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -101,7 +102,26 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
       return;
     }
 
-    res.json(result);
+    const app = result.application as { profile_json: unknown; extracted_markdown: string | null; resume_id: string };
+
+    let profileStatus: 'ready' | 'pending' | 'none';
+    if (app.profile_json) {
+      profileStatus = 'ready';
+    } else if (!app.extracted_markdown) {
+      profileStatus = 'none';
+    } else {
+      profileStatus = 'pending';
+      // Deterministic jobId makes this idempotent — repeated polls while
+      // pending just hit the same in-flight/queued BullMQ job rather than
+      // enqueueing duplicates.
+      await resumeQueue.add(
+        'process-resume',
+        { applicationId: req.params.id, resumeId: app.resume_id, profileOnly: true },
+        { jobId: `profile-${app.resume_id}` }
+      );
+    }
+
+    res.json({ ...result, application: { ...result.application, profile_status: profileStatus } });
   } catch (err) {
     next(err);
   }
@@ -503,6 +523,70 @@ router.get('/:id/history', async (req: Request, res: Response, next: NextFunctio
     next(err);
   }
 });
+
+// ─── DELETE /:id — Remove an application and its resume file ────────────────
+//
+// Hard-deletes the application (cascades ai evaluations, state history, and
+// the processing job), then removes its resume row/file unless another
+// application still points at it (possible after a resolve-conflict
+// override reassigns a resume_id onto a different application), and the
+// candidate row unless another application still references it.
+
+router.delete(
+  '/:id',
+  requireRole('owner'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await withTransaction(async (client) => {
+        const appRes = await client.query<{ id: string; candidate_id: string; resume_id: string }>(
+          `SELECT id, candidate_id, resume_id FROM applications WHERE id = $1`,
+          [req.params.id]
+        );
+        const app = appRes.rows[0];
+        if (!app) return null;
+
+        // No ON DELETE clause from role_history_snapshots -> applications.
+        await client.query('DELETE FROM role_history_snapshots WHERE application_id = $1', [app.id]);
+        await client.query('DELETE FROM applications WHERE id = $1', [app.id]);
+
+        let deletedResumePath: string | null = null;
+        const stillUsed = await client.query('SELECT 1 FROM applications WHERE resume_id = $1', [
+          app.resume_id,
+        ]);
+        if (!stillUsed.rows[0]) {
+          const resumeRes = await client.query<{ storage_path: string }>(
+            'DELETE FROM resumes WHERE id = $1 RETURNING storage_path',
+            [app.resume_id]
+          );
+          deletedResumePath = resumeRes.rows[0]?.storage_path ?? null;
+        }
+
+        await client.query(
+          `DELETE FROM candidates
+           WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM applications WHERE candidate_id = $1)`,
+          [app.candidate_id]
+        );
+
+        return { id: app.id, deletedResumePath };
+      });
+
+      if (!result) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Application not found' } });
+        return;
+      }
+
+      if (result.deletedResumePath) {
+        fs.unlink(path.resolve(result.deletedResumePath), (err) => {
+          if (err) console.error(`[Delete] Failed to remove resume file ${result.deletedResumePath}:`, err.message);
+        });
+      }
+
+      res.json({ id: result.id, status: 'deleted' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 // ─── GET /:id/resume — Download resume PDF ───────────────────────────────────
 

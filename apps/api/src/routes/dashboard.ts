@@ -25,7 +25,7 @@ router.get('/summary', async (_req: Request, res: Response, next: NextFunction):
       // Queue backlog
       const queueBacklogRes = await client.query<{ count: string }>(
         `SELECT COUNT(*) AS count FROM resume_processing_jobs
-         WHERE status IN ('queued', 'extracting', 'scoring')`
+         WHERE status IN ('queued', 'extracting', 'extracted', 'scoring', 'needs_review')`
       );
 
       // Failed count

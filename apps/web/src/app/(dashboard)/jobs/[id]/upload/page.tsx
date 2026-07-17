@@ -17,7 +17,16 @@ export default function UploadPage() {
   });
 
   return (
-    <div style={{ maxWidth: '720px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div
+      style={{
+        maxWidth: 720,
+        width: '100%',
+        margin: '0 auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+      }}
+    >
       <Breadcrumb
         items={[
           { label: 'Jobs', href: '/jobs' },

@@ -168,6 +168,7 @@ export type Application = {
   processing_status: 'queued' | 'extracting' | 'extracted' | 'scoring' | 'completed' | 'failed' | 'needs_review';
   error_message?: string;
   conflict_data?: CandidateConflictData | null;
+  profile_status?: 'ready' | 'pending' | 'none';
   created_at: string;
   updated_at: string;
   candidate?: Candidate;
@@ -208,6 +209,7 @@ export const applicationsApi = {
           processing_status: row.processing_status,
           error_message: row.error_message,
           conflict_data: row.conflict_data ?? null,
+          profile_status: row.profile_status,
           created_at: row.applied_at,
           updated_at: row.updated_at,
           candidate: {
@@ -247,6 +249,8 @@ export const applicationsApi = {
 
   getHistory: (id: string) =>
     apiClient.get<{ history: StatusHistoryEntry[] }>(`/applications/${id}/history`),
+
+  delete: (id: string) => apiClient.delete<{ id: string; status: string }>(`/applications/${id}`),
 };
 
 // ─── Candidates ────────────────────────────────────────────────────────────────
