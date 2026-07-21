@@ -64,7 +64,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction): Promise
            COUNT(a.id) FILTER (WHERE ae.tier = 'A') AS tier_a_count,
            COUNT(a.id) FILTER (WHERE ae.tier = 'B') AS tier_b_count,
            COUNT(a.id) FILTER (WHERE ae.tier = 'C') AS tier_c_count,
-           COUNT(a.id) FILTER (WHERE a.status IN ('uploaded', 'queued', 'extracting', 'extracted', 'scoring', 'duplicate_candidate')) AS processing_count
+           COUNT(a.id) FILTER (WHERE a.status IN ('uploaded', 'queued', 'extracting', 'extracted', 'scoring')) AS processing_count
          FROM job_requisitions jr
          LEFT JOIN applications a ON a.job_id = jr.id
          LEFT JOIN LATERAL (

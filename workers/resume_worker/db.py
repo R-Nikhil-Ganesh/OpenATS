@@ -1,5 +1,6 @@
 import json
 import logging
+import asyncio
 import asyncpg
 from config import config
 from typing import Optional
@@ -13,11 +14,31 @@ async def get_pool() -> asyncpg.Pool:
     """Return (or lazily create) the global connection pool."""
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(
-            config.database_url,
-            min_size=2,
-            max_size=10,
-        )
+        last_error: Exception | None = None
+        for attempt in range(1, 6):
+            try:
+                _pool = await asyncpg.create_pool(
+                    config.database_url,
+                    min_size=2,
+                    max_size=10,
+                )
+                break
+            except (OSError, asyncpg.PostgresError) as exc:
+                last_error = exc
+                logger.warning(
+                    "DB pool connection attempt %d/5 failed: %s",
+                    attempt,
+                    exc,
+                )
+                if attempt == 5:
+                    break
+                await asyncio.sleep(min(2 * attempt, 5))
+
+        if _pool is None:
+            raise ConnectionError(
+                f"Unable to connect to PostgreSQL at {config.database_url}. "
+                "Start the database and try again."
+            ) from last_error
     return _pool
 
 

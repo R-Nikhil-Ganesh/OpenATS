@@ -2,3 +2,7 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'workers/*'
+allowBuilds:
+  canvas: true
+  esbuild: true
+  msgpackr-extract: true

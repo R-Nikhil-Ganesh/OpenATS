@@ -39,7 +39,11 @@ fs.mkdirSync(uploadDir, { recursive: true });
 app.use(helmet());
 app.use(
   cors({
-    origin: true,
+    // The Vite dev server's port isn't fixed (it defaults to 8080 and
+    // auto-increments if that's taken), so a single hardcoded origin would
+    // break local dev regularly. Only enforce the configured FRONTEND_URL
+    // in production, where the built app is always served from a fixed port.
+    origin: process.env.NODE_ENV === 'production' ? config.frontend.url : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],

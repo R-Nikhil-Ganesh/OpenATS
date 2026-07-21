@@ -153,14 +153,22 @@ router.post(
         id: string;
         revoked_at: Date | null;
         expires_at: Date;
+        is_active: boolean;
       }>(
-        `SELECT id, revoked_at, expires_at FROM refresh_tokens
-         WHERE token_hash = $1`,
+        `SELECT rt.id, rt.revoked_at, rt.expires_at, u.is_active
+         FROM refresh_tokens rt
+         JOIN users u ON u.id = rt.user_id
+         WHERE rt.token_hash = $1`,
         [tokenHash]
       );
 
       const tokenRow = tokenResult.rows[0];
-      if (!tokenRow || tokenRow.revoked_at !== null || tokenRow.expires_at < new Date()) {
+      if (
+        !tokenRow ||
+        tokenRow.revoked_at !== null ||
+        tokenRow.expires_at < new Date() ||
+        !tokenRow.is_active
+      ) {
         res.status(401).json({
           error: { code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token is invalid, revoked, or expired' },
         });

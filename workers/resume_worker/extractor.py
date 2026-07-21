@@ -39,10 +39,29 @@ def extract_pdf_to_markdown(pdf_path: str) -> dict[str, Any]:
     with open(pdf_path, "rb") as fh:
         content_hash = hashlib.sha256(fh.read()).hexdigest()
 
-    # Pull standard PDF metadata
+    # Pull standard PDF metadata, plus hyperlink annotations.
+    #
+    # pymupdf4llm only turns a hyperlink into `[text](url)` markdown when the
+    # visible text sufficiently overlaps the link's clickable area — an
+    # icon-only "GitHub"/"LinkedIn" link, or a loosely-placed label, gets
+    # silently dropped and the URL never appears anywhere in the extracted
+    # text. Walk the PDF's link annotations directly so those URLs are never
+    # lost, appending them as bare URLs (not `[text](url)`) so they also
+    # survive normalizer.py's markdown-link stripping and reach the profiler.
     doc = pymupdf.open(pdf_path)
     pdf_metadata = doc.metadata or {}
+    seen_links: set[str] = set()
+    hyperlinks: list[str] = []
+    for page in doc:
+        for link in page.get_links():
+            uri = link.get("uri")
+            if link.get("kind") == pymupdf.LINK_URI and uri and uri not in seen_links:
+                seen_links.add(uri)
+                hyperlinks.append(uri)
     doc.close()
+
+    if hyperlinks:
+        full_markdown += "\n\n## Linked URLs\n" + "\n".join(hyperlinks)
 
     extraction_metadata: dict[str, Any] = {
         "page_count": len(chunks),

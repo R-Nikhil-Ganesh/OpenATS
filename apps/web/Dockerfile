@@ -1,33 +1,40 @@
-# Stage 1: deps
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
-COPY package.json ./
-RUN npm install --frozen-lockfile
 
-# Stage 2: builder
+COPY package.json ./
+RUN npm install
+
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED 1
+
+# Hard reset any previous Next artifacts so TanStack/Nitro output is what gets served
+RUN rm -rf .next dist .output .tanstack public/_next
+
+ENV NITRO_PRESET=node-server
 RUN npm run build
 
-# Stage 3: runner
 FROM node:20-alpine AS runner
 WORKDIR /app
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
 
+ENV NODE_ENV=production
+
+# Bind to Docker network interface
+ENV HOSTNAME="0.0.0.0"
+ENV PORT=3000
+
+# Nitro/React-Start commonly respect these
+ENV NITRO_HOST="0.0.0.0"
+ENV NITRO_PORT=3000
+
+# Copy ONLY TanStack/Nitro outputs (do not copy Next build artifacts)
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/.output ./.output
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
 
-USER nextjs
 EXPOSE 3000
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
 
-CMD ["node", "server.js"]
+# Use direct exec so the container doesn't restart due to shell wrapper issues
+CMD ["node","/app/.output/server/index.mjs"]

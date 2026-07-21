@@ -10,15 +10,16 @@ import { config } from '../config';
 // a service restart.
 // ---------------------------------------------------------------------------
 
-export type ModelKey = 'scoring_model' | 'compare_model' | 'chat_model' | 'profile_model';
+export type ModelKey = 'scoring_model' | 'compare_model' | 'chat_model' | 'profile_model' | 'nvidia_link_model';
 
-export const MODEL_KEYS: ModelKey[] = ['scoring_model', 'compare_model', 'chat_model', 'profile_model'];
+export const MODEL_KEYS: ModelKey[] = ['scoring_model', 'compare_model', 'chat_model', 'profile_model', 'nvidia_link_model'];
 
 const MODEL_DEFAULTS: Record<ModelKey, string> = {
   scoring_model: config.vllm.model,
   compare_model: config.vllm.compareModel,
   chat_model: config.vllm.compareModel,
   profile_model: config.vllm.profileModel,
+  nvidia_link_model: config.nvidia.model || 'z-ai/glm-5.2',
 };
 
 /** Fetch all model selections, falling back to config defaults for any missing key. */
@@ -74,6 +75,33 @@ export async function listAvailableModels(): Promise<string[]> {
   const timer = setTimeout(() => controller.abort(), 5_000);
   try {
     const res = await fetch(`${config.vllm.baseUrl}/v1/models`, { signal: controller.signal });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { data?: { id?: string }[] };
+    return (data.data ?? [])
+      .map((m) => m.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      .sort((a, b) => a.localeCompare(b));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * List models available on the NVIDIA NIM API server.
+ */
+export async function listNvidiaModels(): Promise<string[]> {
+  if (!config.nvidia.apiKey) return [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6_000);
+  try {
+    const res = await fetch(`${config.nvidia.baseUrl}/models`, {
+      headers: {
+        Authorization: `Bearer ${config.nvidia.apiKey}`,
+      },
+      signal: controller.signal,
+    });
     if (!res.ok) return [];
     const data = (await res.json()) as { data?: { id?: string }[] };
     return (data.data ?? [])

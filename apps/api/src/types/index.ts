@@ -26,7 +26,7 @@ export type EmploymentType =
   | 'internship'
   | 'freelance';
 
-export type JobStatus = 'draft' | 'open' | 'paused' | 'closed' | 'archived';
+export type JobStatus = 'draft' | 'active' | 'paused' | 'closed' | 'archived';
 
 export type ProcessingJobStatus =
   | 'queued'

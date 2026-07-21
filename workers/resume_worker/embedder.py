@@ -1,4 +1,6 @@
 import logging
+import os
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -16,12 +18,69 @@ _model: Optional[SentenceTransformer] = None
 _MAX_CHARS = 8_000
 
 
+def _candidate_hf_cache_roots() -> list[Path]:
+    roots: list[Path] = []
+    hf_home = os.getenv("HF_HOME")
+    if hf_home:
+        roots.append(Path(hf_home))
+
+    roots.append(Path.home() / ".cache" / "huggingface")
+    roots.append(Path.home() / "AppData" / "Local" / "huggingface")
+
+    deduped: list[Path] = []
+    for root in roots:
+        if root not in deduped:
+            deduped.append(root)
+    return deduped
+
+
+def _resolve_local_model_source(model_name: str) -> Path | None:
+    explicit_path = os.getenv("EMBEDDING_MODEL_PATH")
+    if explicit_path:
+        path = Path(explicit_path)
+        if path.exists():
+            return path
+
+    candidate_names = [model_name]
+    if "/" not in model_name:
+        candidate_names.append(f"sentence-transformers/{model_name}")
+
+    for candidate_name in candidate_names:
+        model_dir_name = candidate_name.replace("/", "--")
+        for cache_root in _candidate_hf_cache_roots():
+            snapshot_root = cache_root / "hub" / f"models--{model_dir_name}" / "snapshots"
+            if not snapshot_root.is_dir():
+                continue
+
+            snapshots = sorted(
+                (entry for entry in snapshot_root.iterdir() if entry.is_dir()),
+                key=lambda entry: entry.stat().st_mtime,
+                reverse=True,
+            )
+            if snapshots:
+                return snapshots[0]
+
+    local_path = Path(model_name)
+    if local_path.is_dir():
+        return local_path
+
+    return None
+
+
 def get_model() -> SentenceTransformer:
     """Return (and lazily load) the global SentenceTransformer instance."""
     global _model
     if _model is None:
-        logger.info("Loading embedding model: %s", config.embedding_model)
-        _model = SentenceTransformer(config.embedding_model, device="cpu")
+        model_source = _resolve_local_model_source(config.embedding_model)
+        if model_source is None:
+            raise RuntimeError(
+                "No cached embedding model found for "
+                f"{config.embedding_model}. Set EMBEDDING_MODEL_PATH to a local "
+                "snapshot directory or pre-populate the Hugging Face cache."
+            )
+
+        logger.info("Loading embedding model from local cache: %s", model_source)
+        _model = SentenceTransformer(str(model_source), device="cpu")
         logger.info(
             "Embedding model loaded (dim=%d)", config.embedding_dim
         )

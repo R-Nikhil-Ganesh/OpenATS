@@ -21,11 +21,16 @@ type ChatOptions = {
   temperature?: number;
   /** Override the default model for this call. */
   model?: string;
+  /** Bypass the global config.nvidia.enabled check and force routing to NVIDIA NIM if API key is present */
+  forceNvidia?: boolean;
 };
 
 /** Remove leading/trailing ``` or ```json fences the model may wrap output in. */
 function stripCodeFences(raw: string): string {
   let cleaned = raw.trim();
+  // Strip DeepSeek <think>...</think> blocks if present
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  cleaned = cleaned.trim();
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '');
   }
@@ -47,16 +52,27 @@ export async function chatCompletion(
   );
 
   try {
-    const res = await fetch(`${config.vllm.baseUrl}/v1/chat/completions`, {
+    const isNvidia = (opts.forceNvidia || config.nvidia.enabled) && !!config.nvidia.apiKey;
+    const baseUrl = isNvidia ? config.nvidia.baseUrl : `${config.vllm.baseUrl}/v1`;
+    const model = isNvidia
+      ? (opts.model && opts.model.includes('/') ? opts.model : config.nvidia.model)
+      : (opts.model ?? config.vllm.model);
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (isNvidia) {
+      headers['Authorization'] = `Bearer ${config.nvidia.apiKey}`;
+    }
+
+    const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       signal: controller.signal,
       body: JSON.stringify({
-        model: opts.model ?? config.vllm.model,
+        model,
         messages,
         max_tokens: opts.maxTokens ?? config.vllm.maxTokens,
         temperature: opts.temperature ?? config.vllm.temperature,
-        ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
+        ...(opts.json && !isNvidia ? { response_format: { type: 'json_object' } } : {}), // Disable forced json format on NIM if not supported
       }),
     });
 

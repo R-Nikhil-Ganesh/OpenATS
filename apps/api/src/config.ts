@@ -1,3 +1,11 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Docker Compose injects `.env` via `env_file`, but running the API directly
+// (e.g. `npm run dev` from apps/api) never reads it otherwise — load it
+// explicitly from the repo root so local/non-Docker runs match Docker's env.
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+
 export const config = {
   port: parseInt(process.env.API_PORT || '3001'),
   db: {
@@ -42,5 +50,15 @@ export const config = {
   },
   frontend: {
     url: process.env.FRONTEND_URL || 'http://localhost:3000',
+  },
+  nvidia: {
+    // Cloud NVIDIA NIM is OFF by default — this deployment runs on local Ollama
+    // (config.vllm) only. Set LLM_USE_NVIDIA=true AND provide a key to opt in.
+    // Without the explicit flag, merely having a key present no longer diverts
+    // interactive LLM calls (compare / ask) away from Ollama.
+    enabled: process.env.LLM_USE_NVIDIA === 'true',
+    apiKey: process.env.NVIDIA_API_KEY || '',
+    baseUrl: process.env.NVIDIA_API_BASE_URL || 'https://integrate.api.nvidia.com/v1',
+    model: process.env.NVIDIA_MODEL || 'deepseek-ai/deepseek-r1',
   },
 } as const;

@@ -16,8 +16,13 @@ This directory contains numbered SQL migration files that are executed **in lexi
 | `004_candidates_and_resumes.sql` | Creates `candidates` (de-duplicated person profiles) and `resumes` (uploaded file records with extracted markdown content and SHA-256 deduplication hash). |
 | `005_applications.sql` | Creates `applications` (the join between candidate + resume + job), `application_ai_evaluations` (LLM scoring results with full audit trail), `application_state_history` (immutable state transition log), `resume_processing_jobs` (BullMQ job tracking), and `role_history_snapshots` (denormalized point-in-time records). |
 | `006_embeddings.sql` | Creates `resume_embeddings` and `job_embeddings` tables using `vector(384)` columns for `all-MiniLM-L6-v2` embeddings. Supports semantic similarity search via pgvector. |
+| *(007 — removed)* | Originally added Row-Level-Security policies for multi-tenancy; deleted when the app moved to a single-tenant model (`tenant_id` was dropped from `003`-`006` in the same change). The number was never reclaimed. |
 | `008_indexes.sql` | Creates B-tree indexes on high-cardinality lookup columns and **IVFFlat** indexes on embedding columns for fast approximate nearest-neighbor (ANN) cosine-distance queries. |
-| `009_seed_admin.sql` | Automatically seeds a default admin user (`admin@local.com`) for the single-tenant environment. |
+| `009_seed_admin.sql` | Automatically seeds a default admin user (`admin@local.host`) for the single-tenant environment. |
+| `010_app_settings.sql` | Creates the `app_settings` table backing the Settings page (model selection, etc.). |
+| `011_resume_profile.sql` | Adds structured resume-profile columns/tables used by the MD->JSON profile extraction step. |
+| `012_conflict_resolution.sql` | Adds the `duplicate_candidate`/`needs_review` states and `conflict_data` column used when a resume's extracted email collides with an existing candidate. |
+| `013_evaluation_indexes.sql` | Composite `(application_id, created_at DESC)` indexes for the "latest evaluation/processing-job row" query pattern used throughout the API. |
 
 ---
 

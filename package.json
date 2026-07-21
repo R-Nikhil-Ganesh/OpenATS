@@ -8,5 +8,12 @@
   },
   "devDependencies": {
     "typescript": "^5.4.0"
+  },
+  "pnpm": {
+    "only-built-dependencies": [
+      "canvas",
+      "esbuild",
+      "msgpackr-extract"
+    ]
   }
 }

@@ -1,5 +1,12 @@
-import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { Pool, PoolClient, QueryResult, QueryResultRow, types } from 'pg';
 import { config } from '../config';
+
+// pg leaves NUMERIC (OID 1700) as a string by default since it can exceed
+// JS safe-integer precision. Our NUMERIC columns (e.g. evaluation scores)
+// are all small enough that float precision is fine, and API responses
+// should return real numbers rather than forcing every call site to
+// remember to coerce.
+types.setTypeParser(1700, (val: string) => (val === null ? null : parseFloat(val)));
 
 export const pool = new Pool({
   host: config.db.host,

@@ -6,6 +6,7 @@ import {
   getModelSettings,
   setModelSettings,
   listAvailableModels,
+  listNvidiaModels,
   MODEL_KEYS,
 } from '../services/settings';
 
@@ -16,8 +17,12 @@ router.use(authenticate);
 
 router.get('/models', async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const [selected, available] = await Promise.all([getModelSettings(), listAvailableModels()]);
-    res.json({ selected, available });
+    const [selected, available, nvidiaAvailable] = await Promise.all([
+      getModelSettings(),
+      listAvailableModels(),
+      listNvidiaModels(),
+    ]);
+    res.json({ selected, available, nvidiaAvailable });
   } catch (err) {
     next(err);
   }
@@ -33,6 +38,7 @@ const putModelsSchema = z
     compare_model: modelName.optional(),
     chat_model: modelName.optional(),
     profile_model: modelName.optional(),
+    nvidia_link_model: modelName.optional(),
   })
   .refine((obj) => MODEL_KEYS.some((k) => obj[k] !== undefined), {
     message: 'Provide at least one model setting to update',

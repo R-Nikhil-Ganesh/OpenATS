@@ -4,13 +4,37 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { withTransaction } from '../db/pool';
+import { query, withTransaction } from '../db/pool';
 import { resumeQueue } from '../db/redis';
 import { authenticate } from '../middleware/auth';
 import { config } from '../config';
 
 const router = Router();
 router.use(authenticate);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// jobId is interpolated into a filesystem path by multer's destination below,
+// so it must be validated as a well-formed UUID (and an existing job) before
+// multer ever touches the disk — otherwise a crafted param is a path-traversal
+// vector.
+async function validateJobId(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const { jobId } = req.params;
+  if (!UUID_RE.test(jobId)) {
+    res.status(400).json({ error: { code: 'INVALID_JOB_ID', message: 'jobId must be a valid UUID' } });
+    return;
+  }
+  try {
+    const result = await query<{ id: string }>('SELECT id FROM job_requisitions WHERE id = $1', [jobId]);
+    if (!result.rows[0]) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+      return;
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
 
 // ─── Multer Configuration ─────────────────────────────────────────────────────
 
@@ -86,6 +110,7 @@ function deriveEmailFromFilename(
 
 router.post(
   '/:jobId/resumes',
+  validateJobId,
   upload.array('resumes', 20),
   async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
     const files = req.files as Express.Multer.File[] | undefined;
@@ -185,11 +210,16 @@ router.post(
         });
 
         // Add to BullMQ queue after transaction commits
+        // Enqueue an ABSOLUTE path: the worker runs from its own cwd (and, in
+        // Docker, its own container), so a relative path like "uploads/<id>/f.pdf"
+        // would resolve differently there and extraction would fail to find the
+        // file. path.resolve() against the API's cwd yields a path that is valid
+        // in the worker too (same /app/uploads mount in Docker).
         const bullJob = await resumeQueue.add(
           'process-resume',
           {
             applicationId,
-            resumePath: file.path,
+            resumePath: path.resolve(file.path),
             jobId,
           },
           { jobId: applicationId }

@@ -1,57 +1,32 @@
-'use client';
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 
-import React from 'react';
-import { tierColor, tierBg, tierRgb, statusColor, statusRgb } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 
-type BadgeProps = {
-  tier?: 'A' | 'B' | 'C' | string;
-  status?: string;
-  children?: React.ReactNode;
-  size?: 'sm' | 'md';
-};
+const badgeVariants = cva(
+  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default: "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+        secondary:
+          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        destructive:
+          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
+        outline: "text-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
 
-export function Badge({ tier, status, children, size = 'md' }: BadgeProps) {
-  let color = 'var(--color-muted)';
-  let bg = 'rgba(var(--color-muted-rgb), 0.12)';
-  let rgb = 'var(--color-muted-rgb)';
-  let label = children;
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
-  if (tier) {
-    color = tierColor(tier);
-    bg = tierBg(tier);
-    rgb = tierRgb(tier);
-    label = label ?? `Tier ${tier}`;
-  } else if (status) {
-    color = statusColor(status);
-    rgb = statusRgb(status);
-    bg = `rgba(${rgb}, 0.12)`;
-    label = label ?? status.charAt(0).toUpperCase() + status.slice(1);
-  }
-
-  const padding = size === 'sm' ? '2px 7px' : '3px 10px';
-  const fontSize = size === 'sm' ? '11px' : '12px';
-
-  return (
-    <span
-      title={typeof label === 'string' ? label : undefined}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        maxWidth: '100%',
-        padding,
-        borderRadius: '20px',
-        fontSize,
-        fontWeight: 600,
-        letterSpacing: '0.02em',
-        color,
-        backgroundColor: bg,
-        border: `1px solid rgba(${rgb}, 0.2)`,
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-      }}
-    >
-      {label}
-    </span>
-  );
+function Badge({ className, variant, ...props }: BadgeProps) {
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
+
+export { Badge, badgeVariants };

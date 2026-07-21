@@ -1,370 +1,459 @@
-import axios, { AxiosInstance } from 'axios';
-import { getAccessToken, clearTokens } from './auth';
+import axios from "axios";
+import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./auth";
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-const BASE_URL = API_BASE_URL;
+const API_BASE_URL =
+  import.meta.env.VITE_PUBLIC_API_URL ||
+  import.meta.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:3001";
 
-const apiClient: AxiosInstance = axios.create({
-  baseURL: BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
 });
 
-// Request interceptor: attach Bearer token
-apiClient.interceptors.request.use((config) => {
-  const token = getAccessToken();
-  if (token) {
-    config.headers.set('Authorization', `Bearer ${token}`);
-  }
-  return config;
-});
-
-// Response interceptor: handle 401
-apiClient.interceptors.response.use(
-  (res) => res,
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = getAccessToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
   (error) => {
-    if (error.response?.status === 401 && !error.config.url?.includes('/auth/login')) {
-      clearTokens();
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+    return Promise.reject(error);
+  }
+);
+
+// Access tokens expire in 15m and there's no login page to catch the
+// fallout — without this, an expired token just makes every request 401
+// silently and the app renders with empty data instead of recovering.
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const res = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+    const accessToken: string = res.data.accessToken;
+    setTokens(accessToken, refreshToken);
+    return accessToken;
+  } catch {
+    return null;
+  }
+}
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const original = error.config;
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retry &&
+      !original.url?.includes("/auth/")
+    ) {
+      original._retry = true;
+      refreshPromise ??= refreshAccessToken().finally(() => {
+        refreshPromise = null;
+      });
+      const newToken = await refreshPromise;
+      if (newToken) {
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(original);
       }
+      // Refresh token is also dead — the session is unrecoverable. Clear it
+      // and reload so __root.tsx's ensureAuthenticated() auto-logs-in again.
+      clearTokens();
+      window.location.reload();
     }
     return Promise.reject(error);
   }
 );
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-export const authApi = {
-  login: (data: { email: string; password: string }) =>
-    apiClient.post<{ accessToken: string; refreshToken: string }>('/auth/login', data),
+// ─── Interfaces ─────────────────────────────────────────────────────────────
 
-  logout: () => apiClient.post('/auth/logout'),
-
-  refreshToken: (refreshToken: string) =>
-    apiClient.post<{ accessToken: string }>('/auth/refresh', {
-      refreshToken: refreshToken,
-    }),
-
-  me: () =>
-    apiClient.get<{
-      id: string;
-      fullName: string;
-      email: string;
-      role: string;
-    }>('/auth/me'),
-
-
-};
-
-// ─── Jobs ─────────────────────────────────────────────────────────────────────
-export type Job = {
+export interface Job {
   id: string;
   title: string;
   department: string;
   location: string;
   employment_type: string;
-  status: 'draft' | 'active' | 'closed';
+  status: "draft" | "active" | "paused" | "closed" | "archived";
   raw_jd: string;
-  experience_years_min: number;
-  experience_years_max: number;
+  normalized_jd?: string;
+  required_skills?: string[];
+  nice_to_have_skills?: string[];
+  experience_years_min?: number;
+  experience_years_max?: number;
   created_at: string;
   updated_at: string;
-  total_applicants?: number;
-  tier_a_count?: number;
-  tier_b_count?: number;
-  tier_c_count?: number;
-  processing_count?: number;
-};
+  // stats/aggregates returned by GET /jobs
+  total_applicants?: number | string;
+  by_status?: Record<string, number>;
+  by_tier?: Record<string, number>;
+  tier_a_count?: number | string;
+  tier_b_count?: number | string;
+  tier_c_count?: number | string;
+}
 
-export type JobStats = {
-  total: number;
-  queued: number;
-  processing: number;
-  done: number;
-  failed: number;
-};
-
-export const jobsApi = {
-  list: (params?: { status?: string; page?: number; limit?: number }) =>
-    apiClient.get<{ data: Job[]; pagination: { total: number } }>('/jobs', { params })
-      .then(res => ({ ...res, data: { jobs: res.data.data, total: res.data.pagination.total } })),
-
-  get: (id: string) => apiClient.get<Job>(`/jobs/${id}`),
-
-  create: (data: Omit<Job, 'id' | 'created_at' | 'updated_at'>) =>
-    apiClient.post<Job>('/jobs', data),
-
-  update: (id: string, data: Partial<Job>) => apiClient.put<Job>(`/jobs/${id}`, data),
-
-  delete: (id: string) => apiClient.delete(`/jobs/${id}`),
-
-  getStats: (id: string) => apiClient.get<JobStats>(`/jobs/${id}/stats`),
-
-  getApplications: (id: string, params?: { tier?: string; status?: string }) =>
-    apiClient.get<{ data: any[]; pagination: any }>(`/jobs/${id}/applications`, { params })
-      .then(res => {
-        const applications = res.data.data.map(row => ({
-          id: row.id,
-          job_id: row.job_id || id,
-          candidate_id: row.candidate_id,
-          status: row.status,
-          tier: row.tier,
-          score: row.score,
-          processing_status: row.processing_status,
-          created_at: row.applied_at,
-          updated_at: row.updated_at,
-          candidate: {
-            id: row.candidate_id,
-            full_name: row.full_name,
-            email: row.email,
-            phone: row.phone,
-            location: row.location,
-            resume_url: row.file_name,
-            created_at: row.applied_at,
-          },
-          ai_analysis: {
-            matched_skills: row.matched_skills || [],
-            missing_requirements: row.missing_requirements || [],
-            strengths: row.strengths || [],
-            weaknesses: row.weaknesses || [],
-            recommendation: row.recommendation || '',
-            extracted_text: row.extracted_markdown || '',
-          },
-          profile: row.profile_json ?? undefined,
-        }));
-        return { ...res, data: { applications } };
-      }),
-};
-
-// ─── Applications ─────────────────────────────────────────────────────────────
-export type ResumeProfile = {
-  name: string;
-  email: string;
-  phone: string;
-  location: string;
-  links: { linkedin: string; github: string; portfolio: string };
-  summary: string;
-  skills: string[];
-  experience: { title: string; company: string; duration: string; highlights: string[] }[];
-  education: { degree: string; institution: string; year: string }[];
-};
-
-export type CandidateConflictData = {
-  extracted_email: string | null;
-  extracted_name: string | null;
-  conflicting_candidate_id: string | null;
-  conflicting_candidate_name: string | null;
-  conflicting_application_id: string | null;
-  conflict_type: 'same_job_duplicate' | 'cross_job_merge';
-  detected_at_step: string;
-};
-
-export type Application = {
-  id: string;
-  job_id: string;
-  candidate_id: string;
-  status: 'uploaded' | 'queued' | 'extracting' | 'extracted' | 'scoring' | 'reviewable' | 'screening' | 'interviewing' | 'hired' | 'rejected' | 'archived' | 'duplicate_candidate';
-  tier: 'A' | 'B' | 'C' | null;
-  score: number | null;
-  processing_status: 'queued' | 'extracting' | 'extracted' | 'scoring' | 'completed' | 'failed' | 'needs_review';
-  error_message?: string;
-  conflict_data?: CandidateConflictData | null;
-  profile_status?: 'ready' | 'pending' | 'none';
-  created_at: string;
-  updated_at: string;
-  candidate?: Candidate;
-  ai_analysis?: AIAnalysis;
-  profile?: ResumeProfile;
-};
-
-export type AIAnalysis = {
-  matched_skills: { skill: string; confidence: number }[];
-  missing_requirements: string[];
-  strengths: string[];
-  weaknesses: string[];
-  recommendation: string;
-  extracted_text: string;
-};
-
-export type StatusHistoryEntry = {
-  id: string;
-  from_status: string;
-  to_status: string;
-  changed_by: string;
-  changed_at: string;
-  note?: string;
-};
-
-export const applicationsApi = {
-  get: (id: string) => 
-    apiClient.get<{ application: any; history: StatusHistoryEntry[] }>(`/applications/${id}`)
-      .then(res => {
-        const row = res.data.application;
-        const application: Application = {
-          id: row.id,
-          job_id: row.job_id,
-          candidate_id: row.candidate_id,
-          status: row.status,
-          tier: row.tier,
-          score: row.score,
-          processing_status: row.processing_status,
-          error_message: row.error_message,
-          conflict_data: row.conflict_data ?? null,
-          profile_status: row.profile_status,
-          created_at: row.applied_at,
-          updated_at: row.updated_at,
-          candidate: {
-            id: row.candidate_id,
-            full_name: row.full_name,
-            email: row.email,
-            phone: row.phone,
-            location: row.location,
-            linkedin_url: row.linkedin_url,
-            github_url: row.github_url,
-            resume_url: row.storage_path,
-            created_at: row.applied_at,
-          },
-          ai_analysis: {
-            matched_skills: row.matched_skills || [],
-            missing_requirements: row.missing_requirements || [],
-            strengths: row.strengths || [],
-            weaknesses: row.weaknesses || [],
-            recommendation: row.recommendation,
-            extracted_text: row.extracted_markdown,
-          },
-          profile: row.profile_json ?? undefined,
-        };
-        return { ...res, data: application };
-      }),
-
-  updateStatus: (id: string, data: { status: string; note?: string }) =>
-    apiClient.patch<Application>(`/applications/${id}/status`, data),
-
-  reprocess: (id: string) => apiClient.post<Application>(`/applications/${id}/reprocess`),
-
-  resolveConflict: (id: string, action: 'override' | 'discard') =>
-    apiClient.post<{ status: string; applicationId?: string; bullmqJobId?: string }>(
-      `/applications/${id}/resolve-conflict`,
-      { action }
-    ),
-
-  getHistory: (id: string) =>
-    apiClient.get<{ history: StatusHistoryEntry[] }>(`/applications/${id}/history`),
-
-  delete: (id: string) => apiClient.delete<{ id: string; status: string }>(`/applications/${id}`),
-};
-
-// ─── Candidates ────────────────────────────────────────────────────────────────
-export type Candidate = {
+export interface Candidate {
   id: string;
   full_name: string;
   email: string;
   phone?: string;
-  location?: string;
   linkedin_url?: string;
   github_url?: string;
-  resume_url?: string;
+  location?: string;
   created_at: string;
-};
+  updated_at: string;
+  // present on GET /candidates (joined from the candidate's latest application)
+  application_id?: string;
+  job_title?: string;
+  job_department?: string;
+  tier?: "A" | "B" | "C";
+  score?: number;
+}
 
-export const candidatesApi = {
-  get: (id: string) => apiClient.get<Candidate>(`/candidates/${id}`),
-};
-
-// ─── Compare ───────────────────────────────────────────────────────────────────
-export type CompareDimension = {
-  name: string;
-  a_assessment: string;
-  b_assessment: string;
-  edge: 'a' | 'b' | 'tie';
-};
-
-export type CompareCandidate = {
-  applicationId: string;
-  fullName: string;
-  tier: 'A' | 'B' | 'C' | null;
-  score: number | null;
-  profile?: ResumeProfile;
-};
-
-export type CompareResult = {
-  candidates: { a: CompareCandidate; b: CompareCandidate };
-  comparison: {
-    dimensions: CompareDimension[];
-    winner: 'a' | 'b' | 'tie';
-    summary: string;
-  };
-};
-
-export type CompareChatMessage = { role: 'user' | 'assistant'; content: string };
-
-export const compareApi = {
-  compare: (applicationIds: [string, string]) =>
-    apiClient.post<CompareResult>('/compare', { applicationIds }),
-
-  ask: (applicationIds: [string, string], question: string, history: CompareChatMessage[]) =>
-    apiClient.post<{ answer: string }>('/compare/ask', { applicationIds, question, history }),
-};
-
-// ─── Role History ──────────────────────────────────────────────────────────────
-export type RoleHistoryEntry = {
+export interface Application {
   id: string;
-  candidate_name: string;
-  role: string;
-  department: string;
-  tier: 'A' | 'B' | 'C';
-  score: number;
-  milestone: 'screening' | 'interviewing' | 'hired';
-  skill_pattern?: string;
-  accepted_at: string;
-};
+  candidate_id: string;
+  resume_id: string;
+  job_id: string;
+  status:
+    | "uploaded"
+    | "queued"
+    | "extracting"
+    | "extracted"
+    | "scoring"
+    | "reviewable"
+    | "screening"
+    | "interviewing"
+    | "hired"
+    | "rejected"
+    | "archived";
+  applied_at: string;
+  reviewer_notes?: string;
+  created_at: string;
+  updated_at: string;
+  candidate?: Candidate;
+  job_title?: string;
+  job_department?: string;
+  score?: number;
+  tier?: "A" | "B" | "C" | "unscored";
+  reasons?: {
+    strengths: string[];
+    weaknesses: string[];
+    cultural_fit_notes?: string;
+  };
+  matched_skills?: Array<{
+    skill: string;
+    confidence: number;
+    evidence: string;
+  }>;
+  missing_requirements?: string[];
+  recommendation?: string;
+  extracted_markdown?: string;
+}
 
-export const roleHistoryApi = {
-  list: (params?: { department?: string; milestone?: string; page?: number }) =>
-    apiClient.get<{ data: RoleHistoryEntry[]; pagination: { total: number } }>('/role-history', { params })
-      .then(res => ({ ...res, data: { entries: res.data.data, total: res.data.pagination.total } })),
+export interface ApplicationDetail extends Application {
+  candidate: Candidate;
+  resume: {
+    id: string;
+    original_filename: string;
+    extracted_markdown: string;
+    file_size_bytes: number;
+  };
+  latest_evaluation?: {
+    id: string;
+    model_name: string;
+    tier: "A" | "B" | "C" | "unscored";
+    score: number;
+    matched_skills: Array<{
+      skill: string;
+      confidence: number;
+      evidence: string;
+    }>;
+    missing_requirements: string[];
+    reasons: {
+      strengths: string[];
+      weaknesses: string[];
+      cultural_fit_notes?: string;
+    };
+    recommendation: string;
+    scored_at: string;
+  };
+  processing_job?: {
+    status: string;
+    progress: number;
+    error_message?: string;
+  };
+}
 
-  findSimilar: (jobId: string) =>
-    apiClient.get<{ results: (RoleHistoryEntry & { similarity_score: number })[] }>(
-      '/role-history/similar',
-      { params: { job_id: jobId } }
-    ),
-};
-
-// ─── Settings ──────────────────────────────────────────────────────────────────
-export type ModelSettings = {
-  scoring_model: string;
-  compare_model: string;
-  chat_model: string;
-  profile_model: string;
-};
-
-export const settingsApi = {
-  getModels: () =>
-    apiClient.get<{ selected: ModelSettings; available: string[] }>('/settings/models'),
-
-  updateModels: (updates: Partial<ModelSettings>) =>
-    apiClient.put<{ selected: ModelSettings }>('/settings/models', updates),
-};
-
-// ─── Dashboard ────────────────────────────────────────────────────────────────
-export type DashboardSummary = {
+export interface DashboardSummary {
   active_jobs: number;
   total_applicants: number;
   queue_backlog: number;
   failed_count: number;
-  tier_distribution: { tier: string; count: number }[];
-  recent_jobs: Job[];
+  awaiting_review: number;
+  new_resumes: number;
+  tier_distribution: Array<{
+    tier: "A" | "B" | "C";
+    count: number;
+  }>;
+  status_distribution: Record<string, number>;
+  recent_jobs: Array<{
+    id: string;
+    title: string;
+    department: string;
+    status: string;
+    created_at: string;
+  }>;
+}
+
+export interface CompareDimension {
+  name: string;
+  a_assessment: string;
+  b_assessment: string;
+  edge: "a" | "b" | "tie";
+}
+
+export interface CompareResponse {
+  candidates: {
+    a: {
+      applicationId: string;
+      fullName: string;
+      tier: string | null;
+      score: number | null;
+      profile: any;
+    };
+    b: {
+      applicationId: string;
+      fullName: string;
+      tier: string | null;
+      score: number | null;
+      profile: any;
+    };
+  };
+  comparison: {
+    dimensions: CompareDimension[];
+    winner: "a" | "b" | "tie";
+    summary: string;
+  };
+  cached: boolean;
+}
+
+// ─── API Endpoints ───────────────────────────────────────────────────────────
+
+export const jobsApi = {
+  list: async () => {
+    const res = await apiClient.get<{ data: Job[] }>("/jobs");
+    return res.data.data;
+  },
+  create: async (data: Partial<Job>) => {
+    const res = await apiClient.post<Job>("/jobs", data);
+    return res.data;
+  },
+  get: async (id: string) => {
+    const res = await apiClient.get<Job>(`/jobs/${id}`);
+    return res.data;
+  },
+  update: async (id: string, data: Partial<Job>) => {
+    const res = await apiClient.put<Job>(`/jobs/${id}`, data);
+    return res.data;
+  },
+  delete: async (id: string) => {
+    const res = await apiClient.delete(`/jobs/${id}`);
+    return res.data;
+  },
+  stats: async (id: string) => {
+    const res = await apiClient.get<any>(`/jobs/${id}/stats`);
+    return res.data;
+  },
+  applications: async (id: string) => {
+    const res = await apiClient.get<{ data: any[] }>(`/jobs/${id}/applications`);
+    return res.data.data.map((row) => ({
+      id: row.id,
+      job_id: row.job_id || id,
+      candidate_id: row.candidate_id,
+      resume_id: row.resume_id,
+      status: row.status,
+      applied_at: row.applied_at,
+      updated_at: row.updated_at,
+      created_at: row.applied_at,
+      tier: row.tier,
+      score: row.score !== null && row.score !== undefined ? Number(row.score) : undefined,
+      candidate: {
+        id: row.candidate_id,
+        full_name: row.full_name,
+        email: row.email,
+        phone: row.phone || undefined,
+        location: row.location || undefined,
+        created_at: row.applied_at,
+        updated_at: row.updated_at,
+      },
+      ai_analysis: {
+        matched_skills: row.matched_skills || [],
+        missing_requirements: row.missing_requirements || [],
+        recommendation: row.recommendation || "",
+        extracted_text: row.extracted_markdown || "",
+      },
+      profile: row.profile_json ?? undefined,
+    })) as Application[];
+  },
+  uploadResumes: async (jobId: string, files: File[]) => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append("resumes", file);
+    });
+    const res = await apiClient.post<{ results: any[] }>(`/jobs/${jobId}/resumes`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.data.results;
+  },
 };
 
-export type QueueStatus = {
-  processing: number;
-  failed: number;
-  queued: number;
+export const candidatesApi = {
+  list: async () => {
+    const res = await apiClient.get<Candidate[]>("/candidates");
+    return res.data;
+  },
+  get: async (id: string) => {
+    const res = await apiClient.get<Candidate>(`/candidates/${id}`);
+    return res.data;
+  },
 };
+
+export const applicationsApi = {
+  get: async (id: string): Promise<ApplicationDetail> => {
+    const res = await apiClient.get<{ application: any; history: any[] }>(`/applications/${id}`);
+    const row = res.data.application;
+    const detail: ApplicationDetail = {
+      id: row.id,
+      candidate_id: row.candidate_id,
+      resume_id: row.resume_id,
+      job_id: row.job_id,
+      status: row.status,
+      applied_at: row.applied_at,
+      updated_at: row.updated_at,
+      created_at: row.applied_at,
+      candidate: {
+        id: row.candidate_id,
+        full_name: row.full_name,
+        email: row.email,
+        phone: row.phone || undefined,
+        linkedin_url: row.linkedin_url || undefined,
+        github_url: row.github_url || undefined,
+        location: row.location || undefined,
+        created_at: row.applied_at,
+        updated_at: row.updated_at,
+      },
+      resume: {
+        id: row.resume_id,
+        original_filename: row.file_name,
+        extracted_markdown: row.extracted_markdown || "",
+        file_size_bytes: row.file_size_bytes || 0,
+      },
+      latest_evaluation: row.eval_id
+        ? {
+            id: row.eval_id,
+            model_name: row.model_name || "",
+            tier: row.tier || "unscored",
+            score: row.score !== null && row.score !== undefined ? Number(row.score) : 0,
+            matched_skills: row.matched_skills || [],
+            missing_requirements: row.missing_requirements || [],
+            reasons: {
+              strengths: row.strengths || [],
+              weaknesses: row.weaknesses || [],
+              cultural_fit_notes: row.reasons?.cultural_fit_notes || undefined,
+            },
+            recommendation: row.recommendation || "",
+            scored_at: row.evaluated_at || "",
+          }
+        : undefined,
+      processing_job: {
+        status: row.processing_status || "queued",
+        progress: row.progress || 0,
+        error_message: row.error_message || undefined,
+      },
+    };
+    return detail;
+  },
+  updateStatus: async (id: string, status: string, note?: string) => {
+    const res = await apiClient.patch<Application>(`/applications/${id}/status`, {
+      status,
+      note,
+    });
+    return res.data;
+  },
+  delete: async (id: string) => {
+    const res = await apiClient.delete(`/applications/${id}`);
+    return res.data;
+  },
+  reprocess: async (id: string, stage?: "extraction" | "scoring") => {
+    const res = await apiClient.post(`/applications/${id}/reprocess`, { stage });
+    return res.data;
+  },
+  getHistory: async (id: string) => {
+    const res = await apiClient.get<any[]>(`/applications/${id}/history`);
+    return res.data;
+  },
+  validateLinks: async (id: string, force = false) => {
+    const res = await apiClient.post<{ links: any[] }>(
+      `/applications/${id}/validate-links${force ? "?force=true" : ""}`
+    );
+    return res.data.links;
+  },
+};
+
+export interface AnalysisMetrics {
+  skill_gaps: Array<{ skill: string; count: number }>;
+  score_distribution: Array<{ bucket: string; count: number }>;
+}
 
 export const dashboardApi = {
-  getSummary: () => apiClient.get<DashboardSummary>('/dashboard/summary'),
-  getQueueStatus: () => apiClient.get<QueueStatus>('/dashboard/queue-status'),
+  summary: async () => {
+    const res = await apiClient.get<DashboardSummary>("/dashboard/summary");
+    return res.data;
+  },
+  queueStatus: async () => {
+    const res = await apiClient.get<any>("/dashboard/queue-status");
+    return res.data;
+  },
+  analysis: async () => {
+    const res = await apiClient.get<AnalysisMetrics>("/dashboard/analysis");
+    return res.data;
+  },
 };
 
-export default apiClient;
+export const settingsApi = {
+  getModels: async () => {
+    const res = await apiClient.get<{
+      selected: Record<string, string>;
+      available: string[];
+      nvidiaAvailable?: string[];
+    }>("/settings/models");
+    return res.data;
+  },
+  updateModels: async (data: Record<string, string>) => {
+    const res = await apiClient.put<{ selected: Record<string, string> }>("/settings/models", data);
+    return res.data;
+  },
+};
+
+export const compareApi = {
+  compare: async (applicationIds: string[]) => {
+    const res = await apiClient.post<CompareResponse>("/compare", {
+      applicationIds,
+    });
+    return res.data;
+  },
+  ask: async (applicationIds: string[], question: string, history?: any[]) => {
+    const res = await apiClient.post<{ answer: string }>("/compare/ask", {
+      applicationIds,
+      question,
+      history,
+    });
+    return res.data;
+  },
+};

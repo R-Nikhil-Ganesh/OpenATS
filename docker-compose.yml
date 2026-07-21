@@ -67,6 +67,9 @@ services:
     environment:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
+      VLLM_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./uploads:/app/uploads
     depends_on:
@@ -76,7 +79,7 @@ services:
         condition: service_healthy
 
   # ------------------------------------------------------------
-  # Web — Next.js frontend
+  # Web — Vite frontend
   # ------------------------------------------------------------
   web:
     build:
@@ -106,6 +109,9 @@ services:
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
       DATABASE_URL: postgresql://${POSTGRES_USER:-openats}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-openats}
+      VLLM_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./uploads:/app/uploads
     depends_on:

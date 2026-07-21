@@ -4,11 +4,14 @@ import path from 'path';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { withTransaction } from '../db/pool';
-import { resumeQueue } from '../db/redis';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { ApplicationStatus } from '../types';
+import { config } from '../config';
+import { resumeQueue, redis } from '../db/redis';
+import { chatCompletionJson } from '../services/llm';
+import { getModel } from '../services/settings';
 
 const router = Router();
 router.use(authenticate);
@@ -229,6 +232,54 @@ router.patch(
         return;
       }
 
+      // ── Email notification when moved out of 'reviewable' ──────────────────
+      // Fetch candidate + job info asynchronously so we don't block the response.
+      if (updated.fromStatus === 'reviewable') {
+        (async () => {
+          try {
+            const emailData = await withTransaction(async (client) => {
+              const row = await client.query(
+                `SELECT c.full_name, c.email, j.title AS job_title, j.department
+                 FROM applications a
+                 JOIN candidates c ON c.id = a.candidate_id
+                 JOIN job_requisitions j ON j.id = a.job_id
+                 WHERE a.id = $1`,
+                [updated.id]
+              );
+              return row.rows[0] as { full_name: string; email: string; job_title: string; department: string } | undefined;
+            });
+
+            if (emailData) {
+              const statusLabels: Record<string, string> = {
+                screening: 'has been moved to Screening',
+                interviewing: 'has been shortlisted for an Interview',
+                hired: 'has been marked as Hired 🎉',
+                rejected: 'has not been selected at this time',
+                archived: 'has been archived',
+              };
+              const statusLabel = statusLabels[updated.toStatus] || `status changed to ${updated.toStatus}`;
+
+              // [EMAIL] — Replace this block with your SMTP/SendGrid/SES call.
+              console.log('─────────────────────────────────────────────────────────');
+              console.log('[EMAIL] Status change notification');
+              console.log(`  To      : ${emailData.email}`);
+              console.log(`  Subject : Update on your application – ${emailData.job_title}`);
+              console.log(`  Body    :`);
+              console.log(`    Dear ${emailData.full_name},`);
+              console.log(`    We wanted to keep you informed about your application`);
+              console.log(`    for the ${emailData.job_title}${emailData.department ? ` (${emailData.department})` : ''} role.`);
+              console.log(`    Your application ${statusLabel}.`);
+              console.log(`    We appreciate your interest and will be in touch shortly.`);
+              console.log(`    Best regards,`);
+              console.log(`    The Hiring Team`);
+              console.log('─────────────────────────────────────────────────────────');
+            }
+          } catch (emailErr) {
+            console.error('[EMAIL] Failed to send status notification:', emailErr);
+          }
+        })();
+      }
+
       res.json(updated);
     } catch (err) {
       next(err);
@@ -289,7 +340,8 @@ router.post(
         'process-resume',
         {
           applicationId: result.appId,
-          resumePath: result.resumePath,
+          // Absolute path so the worker (different cwd/container) can find it.
+          resumePath: result.resumePath ? path.resolve(result.resumePath) : result.resumePath,
           jobId: result.jobId,
           reprocess: true,
         },
@@ -480,7 +532,8 @@ router.post(
         'process-resume',
         {
           applicationId: outcome.applicationId,
-          resumePath,
+          // Absolute path so the worker (different cwd/container) can find it.
+          resumePath: resumePath ? path.resolve(resumePath) : resumePath,
           jobId: outcome.jobId,
           reprocess: true,
           keepSeparate: outcome.keepSeparate,
@@ -534,7 +587,6 @@ router.get('/:id/history', async (req: Request, res: Response, next: NextFunctio
 
 router.delete(
   '/:id',
-  requireRole('owner'),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await withTransaction(async (client) => {
@@ -593,8 +645,8 @@ router.delete(
 router.get('/:id/resume', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const result = await withTransaction(async (client) => {
-      const appRes = await client.query(
-        `SELECT r.storage_path
+      const appRes = await client.query<{ storage_path: string; job_id: string }>(
+        `SELECT r.storage_path, a.job_id
          FROM applications a
          JOIN resumes r ON r.id = a.resume_id
          WHERE a.id = $1`,
@@ -608,9 +660,550 @@ router.get('/:id/resume', async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    res.sendFile(path.resolve(result.storage_path), (err) => {
+    let filePath = path.resolve(result.storage_path);
+
+    if (!fs.existsSync(filePath)) {
+      filePath = path.resolve(config.upload.dir, '..', result.storage_path);
+    }
+
+    if (!fs.existsSync(filePath)) {
+      const parts = result.storage_path.replace(/\\/g, '/').split('/');
+      if (parts.length === 3 && parts[0] === 'uploads') {
+        const [_, tenantId, filename] = parts;
+        filePath = path.resolve(config.upload.dir, '..', 'uploads', tenantId, result.job_id, filename);
+      }
+    }
+
+    if (!fs.existsSync(filePath)) {
+      const filename = path.basename(result.storage_path);
+      filePath = path.resolve(config.upload.dir, result.job_id, filename);
+    }
+
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: { code: 'FILE_NOT_FOUND', message: `Resume file not found at any resolved path` } });
+      return;
+    }
+
+    res.sendFile(filePath, (err) => {
       if (err) next(err);
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /:id/validate-links — Real link and skill verification ───────────
+
+function extractUrls(text: string): string[] {
+  const re = /https?:\/\/[^\s/$.?#].[^\s]*/gi;
+  const matches = text.match(re) ?? [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of matches) {
+    let clean = m.replace(/[.,;)]+$/, "");
+    if (clean.endsWith(')')) clean = clean.slice(0, -1);
+    const key = clean.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(clean);
+    }
+  }
+  return out;
+}
+
+// Rudimentary quality check for GitHub / LinkedIn profile links.
+//
+// We deliberately do NOT gate pass/fail on a server-side fetch: LinkedIn blocks
+// automated requests (999/403 or a dropped connection) and the unauthenticated
+// GitHub API rate-limits (403 after 60 req/hr). A failed request from our server
+// reflects OUR limitations, not a broken candidate link — the old code turned
+// every such failure into a misleading "broken (500)".
+//
+// Instead we validate the URL shape, and for GitHub only (it serves a clean 404
+// for a missing user/repo) do a best-effort liveness ping where anything other
+// than a definite 404 is treated as reachable.
+const GITHUB_PROFILE_RE =
+  /^https?:\/\/(?:www\.)?github\.com\/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[^?#\s]*)?\/?(?:[?#].*)?$/i;
+const LINKEDIN_PROFILE_RE =
+  /^https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|pub|company)\/[^\s/?#]+\/?(?:[?#].*)?$/i;
+
+const RESERVED_GITHUB_NAMES = new Set([
+  'features', 'pulls', 'issues', 'marketplace', 'trending', 'orgs',
+  'explore', 'notifications', 'settings', 'login', 'join', 'contact',
+  'about', 'pricing', 'security', 'customer-stories', 'resources'
+]);
+
+function getTopLanguages(repos: any[]): string[] {
+  const counts: Record<string, number> = {};
+  for (const r of repos) {
+    if (r.language) {
+      counts[r.language] = (counts[r.language] || 0) + 1;
+    }
+  }
+  return Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+}
+
+async function fetchGithubProfileAndRepos(username: string) {
+  const headers: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'application/vnd.github.v3+json',
+  };
+  if (process.env.GITHUB_TOKEN) {
+    headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+  }
+
+  let userInfo: any = null;
+  try {
+    const userRes = await fetch(`https://api.github.com/users/${username}`, { headers, signal: AbortSignal.timeout(5000) });
+    if (userRes.ok) {
+      userInfo = await userRes.json() as any;
+    } else {
+      console.warn(`GitHub profile fetch returned status ${userRes.status} for ${username}`);
+    }
+  } catch (err) {
+    console.error(`Error fetching GitHub user info for ${username}:`, err);
+  }
+
+  let repos: any[] = [];
+  try {
+    const reposRes = await fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=30`, { headers, signal: AbortSignal.timeout(5000) });
+    if (reposRes.ok) {
+      repos = await reposRes.json() as any[];
+    } else {
+      console.warn(`GitHub repos fetch returned status ${reposRes.status} for ${username}`);
+    }
+  } catch (err) {
+    console.error(`Error fetching GitHub repos for ${username}:`, err);
+  }
+
+  return { userInfo, repos };
+}
+
+async function validateSocialProfile(url: string, platform: 'github' | 'linkedin', candidateName?: string): Promise<any> {
+  const trimmed = url.trim();
+  const type = `${platform}_profile`;
+  const label = platform === 'github' ? 'GitHub' : 'LinkedIn';
+  const re = platform === 'github' ? GITHUB_PROFILE_RE : LINKEDIN_PROFILE_RE;
+
+  if (!re.test(trimmed)) {
+    return {
+      url,
+      type,
+      status: 'broken',
+      statusCode: 400,
+      verdict: 'malformed',
+      reason: `Not a well-formed ${label} profile URL.`,
+    };
+  }
+
+  // Best-effort liveness — GitHub only. A definite 404 is the one signal we
+  // trust; rate-limits, timeouts, and network errors are swallowed so they
+  // never masquerade as a broken link.
+  if (platform === 'github') {
+    let username: string | null = null;
+    try {
+      const parsed = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+      const pathParts = parsed.pathname.split('/').filter(Boolean);
+      if (pathParts.length > 0) {
+        username = pathParts[0];
+      }
+    } catch {
+      // ignore
+    }
+
+    const isValidUsername = username && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(username) && !RESERVED_GITHUB_NAMES.has(username.toLowerCase());
+
+    if (isValidUsername) {
+      try {
+        const checkRes = await fetch(trimmed, {
+          method: 'GET',
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          },
+          signal: AbortSignal.timeout(4000),
+        });
+        if (checkRes.status === 404) {
+          return {
+            url,
+            type,
+            status: 'broken',
+            statusCode: 404,
+            verdict: 'not_found',
+            reason: 'GitHub returned 404 — this profile/repository does not exist.',
+          };
+        }
+      } catch (err) {
+        // network/timeout error check; we still proceed to call the API
+      }
+
+      const { userInfo, repos } = await fetchGithubProfileAndRepos(username!);
+
+      if (repos && repos.length > 0) {
+        let llmAnalysis = null;
+        try {
+          const sortedRepos = [...repos].sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0));
+          const reposForLlm = sortedRepos.slice(0, 5).map(r => ({
+            name: r.name,
+            description: r.description,
+            language: r.language,
+            stars: r.stargazers_count,
+            forks: r.forks_count,
+            updated_at: r.updated_at,
+          }));
+
+          const promptMessages = [
+            {
+              role: 'system' as const,
+              content: `You are an expert technical recruiter and code reviewer.
+Analyze the candidate's GitHub public repositories and generate a neat, structured, and concise overview.
+Include:
+1. Summary: A 2-3 sentence high-level overview of their developer profile, primary focus (e.g. frontend, backend, AI, system programming), and activity based on these repositories.
+2. Key Projects: Identify and briefly highlight 2-3 most significant projects (their tech stack, purpose, and significance/reasons).
+3. Primary Skills & Tech Stack: Bullet points of the main languages, frameworks, and technologies demonstrated.
+4. Overall Assessment: A brief 1-2 sentence assessment of their engineering level or strengths from an open-source perspective.
+
+Respond with ONE JSON object and NOTHING else.
+Format the JSON as follows:
+{
+  "summary": "...",
+  "projects": [
+    { "name": "...", "description": "...", "techStack": "...", "significance": "..." }
+  ],
+  "skills": ["...", "..."],
+  "overallAssessment": "..."
+}`,
+            },
+            {
+              role: 'user' as const,
+              content: `Candidate Name: ${candidateName || 'Candidate'}
+GitHub Username: ${username}
+User Bio: ${userInfo?.bio || 'N/A'}
+Public Repos Count: ${userInfo?.public_repos || repos.length}
+Followers: ${userInfo?.followers || 0}
+
+Here are the candidate's top repositories:
+${JSON.stringify(reposForLlm, null, 2)}
+
+Now generate the structured JSON:`,
+            },
+          ];
+
+          try {
+            const selectedNimModel = await getModel('nvidia_link_model');
+            llmAnalysis = await chatCompletionJson<{
+              summary: string;
+              projects: Array<{ name: string; description: string; techStack: string; significance: string }>;
+              skills: string[];
+              overallAssessment: string;
+            }>(promptMessages, { forceNvidia: true, model: selectedNimModel });
+          } catch (llmErr) {
+            console.warn(`Cloud LLM GitHub analysis failed for ${username}, trying local fallback...`, llmErr);
+            try {
+              llmAnalysis = await chatCompletionJson<{
+                summary: string;
+                projects: Array<{ name: string; description: string; techStack: string; significance: string }>;
+                skills: string[];
+                overallAssessment: string;
+              }>(promptMessages, { forceNvidia: false, maxTokens: 1200 });
+            } catch (localErr) {
+              console.error(`Local fallback LLM GitHub analysis also failed for ${username}:`, localErr);
+            }
+          }
+        } catch (outerErr) {
+          console.error(`Outer GitHub analysis error for ${username}:`, outerErr);
+        }
+
+        return {
+          url,
+          type,
+          status: 'valid',
+          statusCode: 200,
+          verdict: 'analyzed',
+          reason: `GitHub profile validated and repositories analyzed for ${username}.`,
+          githubData: {
+            username,
+            avatarUrl: userInfo?.avatar_url,
+            bio: userInfo?.bio || userInfo?.description,
+            publicRepos: userInfo?.public_repos || repos.length,
+            followers: userInfo?.followers || 0,
+            totalStars: repos.reduce((acc, r) => acc + (r.stargazers_count || 0), 0),
+            totalForks: repos.reduce((acc, r) => acc + (r.forks_count || 0), 0),
+            topLanguages: getTopLanguages(repos),
+            analysis: llmAnalysis,
+          }
+        };
+      }
+    }
+  }
+
+  if (platform === 'github') {
+    try {
+      const res = await fetch(trimmed, {
+        method: 'GET',
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(6000),
+      });
+      if (res.status === 404) {
+        return {
+          url,
+          type,
+          status: 'broken',
+          statusCode: 404,
+          verdict: 'not_found',
+          reason: 'GitHub returned 404 — this profile/repository does not exist.',
+        };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return {
+    url,
+    type,
+    status: 'valid',
+    statusCode: 200,
+    verdict: 'reachable',
+    reason: `Well-formed ${label} profile URL.`,
+  };
+}
+
+async function validateProfileName(url: string, candidateName: string, type: string): Promise<any> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      },
+    });
+    if (!res.ok) {
+      return {
+        url,
+        type: type === 'Google Scholar' ? 'scholar_profile' : 'general',
+        status: 'broken',
+        statusCode: res.status,
+        verdict: 'unreachable',
+        reason: `Profile returned status ${res.status}: ${res.statusText}`,
+      };
+    }
+    const html = await res.text();
+    const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : '';
+
+    const normalizedName = candidateName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedHtml = html.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    let matches = false;
+    let foundName = '';
+
+    if (normalizedHtml.includes(normalizedName)) {
+      matches = true;
+      foundName = candidateName;
+    }
+
+    if (!matches && title) {
+      try {
+        const promptMessages = [
+          {
+            role: 'system' as const,
+            content: `Verify if the provided web page title/content belongs to a profile owned by the candidate.
+Respond with ONE JSON object and NOTHING else.
+{
+  "matches": true or false,
+  "ownerName": "the owner's name found on the profile page"
+}`,
+          },
+          {
+            role: 'user' as const,
+            content: `Candidate Name: ${candidateName}
+Page URL: ${url}
+Page Title: ${title}
+HTML Snippet: ${html.slice(0, 1000)}
+
+Now output the JSON:`,
+          },
+        ];
+        const verifyResult = await chatCompletionJson<{ matches: boolean; ownerName: string }>(promptMessages);
+        matches = verifyResult.matches;
+        foundName = verifyResult.ownerName;
+      } catch (llmErr) {
+        console.error('LLM name match error:', llmErr);
+      }
+    }
+
+    return {
+      url,
+      type: type === 'Google Scholar' ? 'scholar_profile' : 'general',
+      status: 'valid',
+      statusCode: 200,
+      verdict: matches ? 'matches' : 'mismatch',
+      reason: matches
+        ? `Profile owner name matches candidate '${candidateName}'.`
+        : `Could not verify owner name. Page title: "${title}". Found: "${foundName || 'Unknown'}"`,
+    };
+  } catch (err: any) {
+    return {
+      url,
+      type: type === 'Google Scholar' ? 'scholar_profile' : 'general',
+      status: 'broken',
+      statusCode: 500,
+      verdict: 'unreachable',
+      reason: `Failed to fetch profile: ${err.message}`,
+    };
+  }
+}
+
+async function validateGeneralUrl(url: string, candidateName: string): Promise<any> {
+  try {
+    const res = await fetch(url, {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      },
+    });
+
+    const isOk = res.ok;
+    const statusCode = res.status;
+
+    if (!isOk) {
+      const getRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+      });
+
+      const html = getRes.ok ? await getRes.text() : '';
+      const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
+      const title = titleMatch ? titleMatch[1].trim() : '';
+
+      const normalizedName = candidateName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normalizedHtml = html.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const nameMatches = normalizedHtml.includes(normalizedName);
+
+      return {
+        url,
+        type: 'general',
+        status: getRes.ok ? 'valid' : 'broken',
+        statusCode: getRes.status,
+        verdict: nameMatches ? 'matches' : 'unknown',
+        reason: getRes.ok
+          ? (nameMatches ? `Name matches on page.` : `Site is reachable. Title: "${title}"`)
+          : `Unreachable: HTTP ${getRes.status}`,
+      };
+    }
+
+    return {
+      url,
+      type: 'general',
+      status: 'valid',
+      statusCode,
+      verdict: 'unknown',
+      reason: `Site is reachable.`,
+    };
+  } catch (err: any) {
+    return {
+      url,
+      type: 'general',
+      status: 'broken',
+      statusCode: 500,
+      verdict: 'unreachable',
+      reason: `Connection failed: ${err.message}`,
+    };
+  }
+}
+
+async function validateSingleUrl(url: string, candidateName: string): Promise<any> {
+  const lowercaseUrl = url.toLowerCase();
+
+  // GitHub and LinkedIn get a rudimentary format/liveness check (see
+  // validateSocialProfile) rather than the old fetch-everything approach that
+  // reported working links as broken.
+  if (lowercaseUrl.includes('github.com')) {
+    return await validateSocialProfile(url, 'github', candidateName);
+  }
+
+  if (lowercaseUrl.includes('linkedin.com')) {
+    return await validateSocialProfile(url, 'linkedin');
+  }
+
+  if (lowercaseUrl.includes('scholar.google.com') || lowercaseUrl.includes('scholar.google.co.in')) {
+    return await validateProfileName(url, candidateName, 'Google Scholar');
+  }
+
+  if (lowercaseUrl.includes('researchgate.net/profile')) {
+    return await validateProfileName(url, candidateName, 'ResearchGate');
+  }
+
+  return await validateGeneralUrl(url, candidateName);
+}
+
+router.post('/:id/validate-links', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const appData = await withTransaction(async (client) => {
+      const appRes = await client.query<{ full_name: string; github_url: string; linkedin_url: string; extracted_markdown: string }>(
+        `SELECT a.id, c.full_name, c.github_url, c.linkedin_url, r.extracted_markdown
+         FROM applications a
+         JOIN candidates c ON c.id = a.candidate_id
+         JOIN resumes r ON r.id = a.resume_id
+         WHERE a.id = $1`,
+        [req.params.id]
+      );
+      return appRes.rows[0];
+    });
+
+    if (!appData) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Application not found' } });
+      return;
+    }
+
+    // candidates.github_url / linkedin_url come from LLM profile extraction and
+    // occasionally hold the hyperlink's anchor text ("GitHub") rather than an
+    // actual URL when no URL was visible near it at extraction time — validating
+    // that literal string as a URL always throws and reports a false "broken".
+    const isUrlLike = (v: string): boolean => /^https?:\/\//i.test(v) || /^[\w-]+\.[a-z]{2,}(\/|$)/i.test(v);
+
+    const uniqueUrls = new Set<string>();
+    if (appData.github_url && isUrlLike(appData.github_url)) uniqueUrls.add(appData.github_url.trim());
+    if (appData.linkedin_url && isUrlLike(appData.linkedin_url)) uniqueUrls.add(appData.linkedin_url.trim());
+    if (appData.extracted_markdown) {
+      extractUrls(appData.extracted_markdown).forEach((l) => uniqueUrls.add(l));
+    }
+
+    // "Recheck" (?force=true) must actually re-run the checks — results are
+    // cached for 24h below, so without this the button just replayed the
+    // same stale cached result on every click.
+    const force = req.query.force === 'true';
+
+    const results = [];
+    for (const url of uniqueUrls) {
+      const cacheKey = `linkcheck:${url}`;
+      if (!force) {
+        try {
+          const cached = await redis.get(cacheKey);
+          if (cached) {
+            results.push(JSON.parse(cached));
+            continue;
+          }
+        } catch (err) {
+          console.error('Redis cache fetch error:', err);
+        }
+      }
+
+      const checkResult = await validateSingleUrl(url, appData.full_name);
+
+      try {
+        await redis.set(cacheKey, JSON.stringify(checkResult), 'EX', 24 * 60 * 60);
+      } catch (err) {
+        console.error('Redis cache set error:', err);
+      }
+
+      results.push(checkResult);
+    }
+
+    res.json({ links: results });
   } catch (err) {
     next(err);
   }

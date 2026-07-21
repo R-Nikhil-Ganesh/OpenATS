@@ -134,3 +134,7 @@ uploads/
 tmp/
 temp/
 seed_jobs.sql
+
+openats.zip
+tmp-openats-ui/
+apps/web/.workspace/
